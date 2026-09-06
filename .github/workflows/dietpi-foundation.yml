@@ -1,0 +1,29 @@
+name: DietPi foundation checks
+
+on:
+  push:
+    branches: ['Testing']
+    paths: ['dietpi/**', '.github/workflows/dietpi-foundation.yml']
+  pull_request:
+    branches: ['Testing']
+    paths: ['dietpi/**', '.github/workflows/dietpi-foundation.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  foundation:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Install validation tools in a virtual environment
+        run: |
+          python3 -m venv /tmp/station-validation
+          /tmp/station-validation/bin/python -m pip install -r dietpi/requirements.txt
+      - name: Check configuration and platform behavior
+        run: python3 -m unittest discover -s dietpi/tests -v
+      - name: Check the Ansible playbook
+        env:
+          ANSIBLE_CONFIG: ./dietpi/ansible.cfg
+        run: /tmp/station-validation/bin/ansible-playbook -i dietpi/inventory.example.ini dietpi/install.yml --syntax-check

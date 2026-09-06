@@ -1,3 +1,11 @@
+# HamPi community continuation — DietPi development
+
+Maintained by [Dustpan95](https://github.com/Dustpan95), based on [HamPi by Dave Slotter, W3DJS](https://github.com/dslotter/HamPi).
+
+The new development target is **DietPi ARM64 on Raspberry Pi 4 and Pi 5**, with selectable radio profiles, desktop operation and planned remote desktop and flashable images.
+
+Start with [the DietPi foundation](dietpi/README.md) and [roadmap](dietpi/ROADMAP.md). This branch contains an initial installer, not a validated image release. The historical documentation and build recipes below are preserved; they are not instructions for the new DietPi installer.
+
 # HamPi, formerly known as W3DJS Raspberry Pi for Ham Radio
 HamPi, formerly known as W3DJS Raspberry Pi for Ham Radio
 

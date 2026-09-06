@@ -1,0 +1,21 @@
+{
+  "schema_version": 1,
+  "base": ["alsa-utils", "usbutils", "libhamlib-utils"],
+  "profiles": {
+    "digital": {
+      "description": "WSJT-X, FLDigi and FLRig desktop station",
+      "requires_desktop": true,
+      "packages": ["wsjtx", "fldigi", "flrig"]
+    },
+    "packet": {
+      "description": "Dire Wolf packet modem; radio setup is separate",
+      "requires_desktop": false,
+      "packages": ["direwolf"]
+    },
+    "sdr": {
+      "description": "RTL-SDR receiver tools and Gqrx desktop",
+      "requires_desktop": true,
+      "packages": ["rtl-sdr", "gqrx-sdr"]
+    }
+  }
+}

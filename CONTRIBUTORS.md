@@ -1,3 +1,7 @@
+##### DietPi community continuation
+
++ [Dustpan95](https://github.com/Dustpan95) — maintainer and DietPi modernization
+
 ##### These are the contributors to HamPi and HamPC, in chronological order:
 
 + Dave Slotter, W3DJS
