@@ -107,6 +107,7 @@ jobs:
               echo "RESULT ${name}: PASS"
             else
               echo "RESULT ${name}: FAIL (exit ${status})"
+              echo "::error title=${name} failed::$(grep -m1 -A2 'fatal:' "ansible-output/${name}.log" | tr '\n' ' ' | cut -c1-400)"
               rc=1
             fi
             echo "::endgroup::"
@@ -146,7 +147,7 @@ jobs:
             echo "_Ubuntu on a hosted runner, not Raspberry Pi OS on a Pi. This shows"
             echo "whether the source builds compile on aarch64; it does not show that"
             echo "Trixie's package set resolves, and nothing here touches a desktop._"
-          } >> "$GITHUB_STEP_SUMMARY"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload logs
         if: always()
