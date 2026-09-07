@@ -23,7 +23,11 @@ on:
       playbooks:
         description: 'Comma-separated playbooks under tasks/ to install'
         required: true
-        default: 'install_soapy,install_hamlib'
+        default: >-
+          install_cmake,install_soapy,install_hamlib,install_chirp,
+          install_quisk,install_qdmr_gui_dmr_radio_programmer,
+          install_voacapl,install_flxmlrpc,install_flnet,
+          install_fldigi,install_pat,install_hamrs
       image_size:
         description: 'Grow the image to this size before installing'
         required: false
@@ -46,6 +50,18 @@ jobs:
     env:
       MNT: /mnt/shackwright
       IMG: shackwright.img
+      # What a push-triggered run installs. Chosen to exercise every repair
+      # made to the playbooks rather than to build a complete station: the
+      # packaged installs (chirp, quisk, qdmr, voacapl), the shared w1hkj
+      # source build on a small program and a large one (flnet, fldigi), the
+      # GitHub releases API lookup and architecture selection (pat), and the
+      # AppImage lookup (hamrs). install_cmake goes first because it now
+      # installs the toolchain the rest depend on instead of removing it.
+      DEFAULT_PLAYBOOKS: >-
+        install_cmake,install_soapy,install_hamlib,install_chirp,
+        install_quisk,install_qdmr_gui_dmr_radio_programmer,
+        install_voacapl,install_flxmlrpc,install_flnet,
+        install_fldigi,install_pat,install_hamrs
 
     steps:
       - uses: actions/checkout@v4
@@ -159,7 +175,7 @@ jobs:
         run: |
           mkdir -p ansible-output
           rc=0
-          IFS=',' read -ra list <<< "${{ inputs.playbooks || 'install_soapy,install_hamlib' }}"
+          IFS=',' read -ra list <<< "${{ inputs.playbooks || env.DEFAULT_PLAYBOOKS }}"
           for name in "${list[@]}"; do
             name="$(echo "$name" | xargs)"
             [ -n "$name" ] || continue
@@ -224,78 +240,127 @@ jobs:
           sudo losetup -d "${{ steps.mount.outputs.loop }}" || true
 
       - name: Boot the image under QEMU
-        # The one check continuous integration can make that resembles a real
-        # user's first five minutes: does this thing actually come up?
+        # The one check CI can make that resembles a real user's first five
+        # minutes: does this thing actually come up?
         #
-        # -M raspi3b, not raspi4b: Ubuntu 24.04 ships QEMU 8.2, and raspi4b
-        # only arrived in QEMU 9.0. raspi3b models a Cortex-A53 with 1 GiB,
-        # which is enough to answer the question that matters -- whether the
-        # root filesystem mounts and userspace starts. QEMU's SD emulation
-        # also insists on a power-of-two image, which 16 GiB satisfies.
+        # Every detail below was established by .github/workflows/
+        # qemu-boot-probe.yml against the stock Raspberry Pi OS image, and
+        # the first version of this step got three of them wrong at once,
+        # producing a 71-byte console log that said nothing whatsoever.
         #
-        # This does not exercise the Pi bootloader, the VideoCore firmware,
-        # GPIO, audio or any radio hardware. It cannot replace putting the
-        # card in a Pi. What it does catch is the class of failure that makes
-        # an image useless to everyone: a root filesystem that will not mount,
-        # a broken package state, a system that never reaches userspace.
+        #   * Capture BOTH serial ports. On QEMU's raspi3b the kernel talks
+        #     on the second one; the first receives nothing at all. A single
+        #     "-serial mon:stdio" records the wrong port and looks like a
+        #     machine that never booted.
+        #   * The console is ttyAMA1. Not ttyAMA0, and not ttyS0. On this
+        #     machine model the PL011 registers as ttyAMA1 and the mini UART
+        #     does not register at all:
         #
-        # Deliberately not a gate. It reports what it saw and does not fail
-        # the build, because a QEMU quirk should not block an image that is
-        # otherwise fine. Read the log.
+        #       3f201000.serial: ttyAMA1 at MMIO 0x3f201000 is a PL011 rev2
+        #       bcm2835-aux-uart: unable to register 8250 port
+        #       Warning: unable to open an initial console.
+        #
+        #     Naming either of the other two gives the kernel no /dev/console,
+        #     so systemd starts without one and dies and the board resets. The
+        #     probe did that forty times in six hundred seconds, and every one
+        #     of those boots looked flawless in the log, because earlycon
+        #     writes straight to MMIO and needs no tty.
+        #   * Do NOT pass -initrd. Booting with the image's initramfs8
+        #     panics with "Attempted to kill init!".
+        #
+        # Also bcm2710-rpi-3-b.dtb rather than the b-plus tree, to match the
+        # machine QEMU is modelling, and systemd.firstboot=off, because a
+        # first boot with nothing preset prompts on the console for locale
+        # and a root password and no answer can arrive from a file.
+        #
+        # raspi3b, not raspi4b: Ubuntu 24.04 ships QEMU 8.2 and raspi4b
+        # arrived in 9.0. QEMU's SD model also insists on a power-of-two
+        # image, which the 16 GiB build satisfies.
+        #
+        # This does not exercise the Pi bootloader, VideoCore firmware, GPIO,
+        # audio or any radio, and it does not replace putting the card in a
+        # Pi. It catches the class of failure that makes an image useless to
+        # everyone: a root filesystem that will not mount, a broken package
+        # state, a system that never reaches userspace.
+        #
+        # Deliberately not a gate. It reports what it saw. Read the log.
         if: always()
         continue-on-error: true
         timeout-minutes: 20
         run: |
-          set -x
           sudo apt-get install -y -qq qemu-system-arm
           loop=$(sudo losetup -Pf --show "$IMG")
           mkdir -p qemu boot-mnt
           sudo mount "${loop}p1" boot-mnt
-          # Trixie ships several kernels; take the 64-bit one that raspi3b can
-          # run, and its matching device tree.
-          cp boot-mnt/kernel8.img qemu/ 2>/dev/null || cp boot-mnt/kernel_2712.img qemu/kernel8.img 2>/dev/null || true
-          cp boot-mnt/bcm2710-rpi-3-b-plus.dtb qemu/ 2>/dev/null || true
-          cp boot-mnt/initramfs8 qemu/ 2>/dev/null || true
-          ls -la qemu/ boot-mnt/ | head -30
+          sudo cp boot-mnt/kernel8.img qemu/ 2>/dev/null || true
+          sudo cp boot-mnt/bcm2710-rpi-3-b.dtb qemu/ 2>/dev/null || true
+          sudo chown -R "$USER" qemu
           sudo umount boot-mnt
           sudo losetup -d "$loop"
 
-          if [ ! -f qemu/kernel8.img ] || [ ! -f qemu/bcm2710-rpi-3-b-plus.dtb ]; then
-            echo "No 64-bit kernel or device tree in the boot partition; cannot boot here."
+          if [ ! -f qemu/kernel8.img ] || [ ! -f qemu/bcm2710-rpi-3-b.dtb ]; then
+            echo "No 64-bit kernel or Pi 3 device tree in the boot partition."
+            echo "Cannot boot here; this is not a verdict on the image."
             exit 0
           fi
 
-          initrd_arg=""
-          [ -f qemu/initramfs8 ] && initrd_arg="-initrd qemu/initramfs8"
-
+          : > qemu/uart0.log
+          : > qemu/uart1.log
           set +e
           timeout 900 qemu-system-aarch64 \
             -M raspi3b \
             -kernel qemu/kernel8.img \
-            -dtb qemu/bcm2710-rpi-3-b-plus.dtb \
-            $initrd_arg \
+            -dtb qemu/bcm2710-rpi-3-b.dtb \
             -drive file="$IMG",format=raw,if=sd \
-            -append "rw earlyprintk loglevel=8 console=ttyAMA0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait fsck.repair=yes systemd.unit=multi-user.target" \
-            -serial mon:stdio -nographic -no-reboot \
-            > qemu/console.log 2>&1
-          echo "qemu exited: $?"
+            -append "rw rootwait earlycon loglevel=8 \
+            console=ttyAMA1,115200 \
+            root=/dev/mmcblk0p2 rootfstype=ext4 \
+            systemd.firstboot=off systemd.unit=multi-user.target" \
+            -serial file:qemu/uart0.log \
+            -serial file:qemu/uart1.log \
+            -display none > qemu/qemu.stdout 2>&1
+          echo "qemu exited: $? (124 means it was still running at the limit)"
           set -e
 
+          # The kernel talks on uart1 on this machine; keep both so a change
+          # in that is visible rather than silently empty.
+          cat qemu/uart0.log qemu/uart1.log > qemu/console.log
+
+          echo "### bytes captured"
+          for f in uart0 uart1 qemu.stdout; do
+            printf '  %-12s %s\n' "$f" "$(stat -c%s "qemu/${f}.log" 2>/dev/null \
+              || stat -c%s "qemu/${f}" 2>/dev/null || echo 0)"
+          done
+
           echo "==================== BOOT CONSOLE (tail) ===================="
-          tail -n 60 qemu/console.log || true
+          tail -n 40 qemu/console.log || true
           echo "============================================================="
           echo "### Boot markers"
-          for marker in "Linux version" "Mounted /" "systemd" "Reached target" "login:" "Welcome to"; do
+          for marker in "Linux version" "VFS: Mounted root" "Run /sbin/init" \
+                        "systemd" "Reached target" "login:" "Kernel panic"; do
             n=$(grep -c "$marker" qemu/console.log 2>/dev/null || echo 0)
-            printf '  %-20s %s\n' "$marker" "$n"
+            printf '  %-22s %s\n' "$marker" "$n"
           done
+
+          if grep -q "Kernel panic" qemu/console.log; then
+            echo "VERDICT: panicked. This image did not boot."
+          elif grep -q "Run /sbin/init" qemu/console.log; then
+            echo "VERDICT: root filesystem mounted and init started."
+          elif grep -q "Linux version" qemu/console.log; then
+            echo "VERDICT: kernel started but never reached init."
+          else
+            echo "VERDICT: no kernel output. Treat as inconclusive, not as a failure."
+          fi
 
       - name: Upload the boot console log
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: qemu-boot-console
-          path: qemu/console.log
+          path: |
+            qemu/uart0.log
+            qemu/uart1.log
+            qemu/qemu.stdout
           retention-days: 14
           if-no-files-found: ignore
 
