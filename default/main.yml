@@ -1,6 +1,32 @@
 ---
 # file: group_vars/all
 # this is the playbook wide default
+
+#
+# PEP 668 / externally managed environments
+#
+# Debian 12 and later, and Ubuntu 23.04 and later, mark the system Python as
+# "externally managed": pip refuses to install into it so that pip and apt
+# cannot fight over the same files. Several HamPi applications are Python
+# programs that need to be importable system-wide and launched from the
+# desktop menu, so they are installed into the system interpreter with the
+# override below.
+#
+# This is a deliberate trade-off, not an oversight. The override is centralized
+# here so there is one place to change it, rather than the sixteen scattered
+# copies of --break-system-packages this replaced.
+#
+# The cleaner long-term fix is a dedicated virtual environment for the Python
+# applications, with the desktop launchers pointing at it. That changes where
+# every one of these programs lives, so it needs testing on real hardware
+# before it ships. See the "Known issues" section of README.md.
+#
+# On an older release that predates PEP 668 the flag does not exist and pip
+# would reject it, so it resolves to an empty string there. The pip module
+# tests extra_args for truthiness, so an empty value adds nothing to the
+# command line.
+pip_system_extra_args: "{{ '--break-system-packages' if (is_bookworm | bool or is_trixie | bool or is_forky | bool) else '' }}"
+
 # BlueDV version is current as of 2020-05-06
 bluedv_version: 09352
 gridtracker_md5sum_armf: ae526dc9855cc536f5ee3fc8f871ebf7

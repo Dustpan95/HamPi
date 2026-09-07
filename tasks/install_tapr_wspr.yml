@@ -169,9 +169,10 @@
 
   - name: pip3 install setuptools
     become: yes
-    command: "pip3 install setuptools --break-system-packages --upgrade --no-binary :all:"
-    args:
-      chdir: /home/{{ ham_user }}/hamradio
+    ansible.builtin.pip:
+      name: setuptools
+      state: latest
+      extra_args: "{{ pip_system_extra_args }} --no-binary :all:"
     retries: 5
     delay: 30
     register: result
@@ -179,9 +180,9 @@
 
   - name: pip3 install PySSTV
     become: yes
-    command: pip3 install PySSTV --break-system-packages
-    args:
-      chdir: /home/{{ ham_user }}/hamradio
+    ansible.builtin.pip:
+      name: PySSTV
+      extra_args: "{{ pip_system_extra_args }}"
     retries: 5
     delay: 30
     register: result

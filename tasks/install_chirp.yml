@@ -40,7 +40,14 @@
     until: download_version.failed == false
 
   - name: Install Chirp {{ download_version.stdout }}
-    command: pip3 install --break-system-packages https://trac.chirp.danplanet.com/chirp_next/next-{{ download_version.stdout }}/chirp-{{ download_version.stdout }}-py3-none-any.whl
+    become: yes
+    ansible.builtin.pip:
+      name: "https://trac.chirp.danplanet.com/chirp_next/next-{{ download_version.stdout }}/chirp-{{ download_version.stdout }}-py3-none-any.whl"
+      extra_args: "{{ pip_system_extra_args }}"
+    retries: 5
+    delay: 30
+    register: result
+    until: result.failed == false
 
 #  - name: Modify categories for chirp.desktop
 #    become: yes

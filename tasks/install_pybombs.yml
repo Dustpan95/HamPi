@@ -22,7 +22,10 @@
 
   - name: Install Python module - PyBOMBS
     become: yes
-    command: pip3 install --upgrade --break-system-packages git+https://github.com/gnuradio/pybombs.git
+    ansible.builtin.pip:
+      name: git+https://github.com/gnuradio/pybombs.git
+      state: latest
+      extra_args: "{{ pip_system_extra_args }}"
     retries: 5
     delay: 30
     register: result

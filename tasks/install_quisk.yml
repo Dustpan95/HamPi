@@ -35,7 +35,10 @@
 
   - name: Install quisk
     become: yes
-    command: python3 -m pip install --upgrade --break-system-packages quisk
+    ansible.builtin.pip:
+      name: quisk
+      state: latest
+      extra_args: "{{ pip_system_extra_args }}"
     retries: 5
     delay: 30
     register: result

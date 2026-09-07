@@ -1,0 +1,73 @@
+#
+# Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
+# Copyright 2024 - 2026, HamPi contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# ---------------------------------------------------------------------------
+# HamPi inventory template
+# ---------------------------------------------------------------------------
+#
+# Copy this file to "hosts" and edit it to match your setup:
+#
+#     cp hosts.example hosts
+#
+# "hosts" is git-ignored, so your inventory will not be overwritten when you
+# pull updates, and your credentials will not be committed by accident.
+#
+# ---------------------------------------------------------------------------
+# Authentication
+# ---------------------------------------------------------------------------
+#
+# Use SSH keys rather than passwords. Passwords in an inventory file sit in
+# plain text on disk and end up in your shell history and backups. To set up
+# key-based access to a fresh Raspberry Pi OS install:
+#
+#     ssh-keygen -t ed25519                 # if you do not already have a key
+#     ssh-copy-id <user>@hampi.local
+#     ssh <user>@hampi.local                # confirm it works without a password
+#
+# Then supply the sudo password at run time instead of storing it:
+#
+#     ansible-playbook -i hosts --ask-become-pass tasks/main.yml
+#
+# The supplied run_HamPi_playbook script passes --ask-become-pass for you.
+#
+# If you must store credentials, encrypt them with Ansible Vault rather than
+# writing them here in the clear:
+#
+#     ansible-vault create group_vars/all/vault.yml
+#     ansible-playbook -i hosts --ask-vault-pass tasks/main.yml
+#
+# ---------------------------------------------------------------------------
+# Hosts
+# ---------------------------------------------------------------------------
+#
+# Replace the example host below with your own. The name on the left is what
+# Ansible connects to, so it must resolve: a hostname, an mDNS name such as
+# hampi.local, or an IP address.
+
+[hampi]
+# hampi.local
+
+# A Raspberry Pi reached by address, with a login that differs from the
+# hostname's default:
+# 192.168.1.50 ansible_user=pi
+
+[pc]
+# An x86_64 machine running Debian or Ubuntu (built as "HamPC").
+# hampc.local
+
+[inovato]
+# An Inovato Quadra (built as "HamIQ"). The playbooks identify this board by
+# the inventory hostname, so this entry must be named exactly "inovato".
+# inovato
+
+[all:vars]
+ansible_port=22
+ansible_python_interpreter=/usr/bin/python3
+
+# Set this to the account that will own the ham radio applications and desktop
+# menu entries. It defaults per platform (pi on Raspberry Pi OS, hampc on a PC,
+# hamiq on an Inovato Quadra); override it here if your login differs.
+# ham_user=pi

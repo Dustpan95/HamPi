@@ -1,23 +1,90 @@
 #!/usr/bin/env bash
 #
-# Copyright 2020 - 2023, Dave Slotter (W3DJS). All rights reserved.
+# Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
+# Copyright 2024 - 2026, HamPi contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Runs the HamPi playbook against the hosts in ./hosts and writes a timestamped
+# log to ./ansible-output/.
+#
+# Usage:
+#     ./run_HamPi_playbook [additional ansible-playbook arguments]
+#
+# Any arguments are passed straight through, so you can limit a run to one
+# machine or one application:
+#
+#     ./run_HamPi_playbook --limit hampi.local
+#     ./run_HamPi_playbook --check
 #
 
-echo -n "Ansible Playbook Run started at: "
-start_time=`date`
-echo $start_time
-# Compute the seconds since epoch for start date
-t1=`date --date="$start_time" +%s`
+set -o pipefail
 
-curdate=`date +%Y-%m-%d`
+cd "$(dirname "$0")" || exit 1
 
-echo "ansible-playbook -i hosts tasks/main.yml"
-ansible-playbook -i hosts tasks/main.yml | tee --append ansible-output/ansible-output_${curdate}.txt
-notify_via_email.py "Ansible has finished (HamPi)."
+INVENTORY="${HAMPI_INVENTORY:-hosts}"
+PLAYBOOK="${HAMPI_PLAYBOOK:-tasks/main.yml}"
+OUTPUT_DIR="${HAMPI_OUTPUT_DIR:-ansible-output}"
 
-# Compute the seconds since epoch for end date
-end_time=`date`
-t2=`date --date="$end_time" +%s`
+if [ ! -f "$INVENTORY" ]; then
+    cat >&2 <<MSG
+error: no inventory file at ./${INVENTORY}
 
-let diff_time=$t2-$t1
-printf "Total time for running Ansible Playbook: %02d:%02d:%02d\n" $((diff_time/3600)) $((diff_time%3600/60)) $((diff_time%60)) | tee --append ansible-output/ansible-output_${curdate}.txt
+Copy the template and edit it to match your setup:
+
+    cp hosts.example hosts
+
+MSG
+    exit 1
+fi
+
+if ! command -v ansible-playbook >/dev/null 2>&1; then
+    cat >&2 <<MSG
+error: ansible-playbook not found
+
+Install the control-node tooling first:
+
+    python3 -m venv ~/.venv/hampi
+    ~/.venv/hampi/bin/pip install -r requirements.txt
+    . ~/.venv/hampi/bin/activate
+
+MSG
+    exit 1
+fi
+
+# tee needs this to exist; previously it did not, and every run lost its log.
+mkdir -p "$OUTPUT_DIR"
+
+logfile="${OUTPUT_DIR}/ansible-output_$(date +%Y-%m-%d_%H%M%S).txt"
+start_time=$(date)
+t1=$(date --date="$start_time" +%s)
+
+echo "Ansible Playbook Run started at: ${start_time}"
+echo "Logging to: ${logfile}"
+echo
+
+# --ask-become-pass prompts for the sudo password rather than requiring it to
+# be stored in the inventory in plain text. If you have passwordless sudo, or
+# you keep the password in an Ansible Vault, pass --become instead.
+ansible-playbook \
+    -i "$INVENTORY" \
+    --ask-become-pass \
+    "$@" \
+    "$PLAYBOOK" 2>&1 | tee --append "$logfile"
+
+# Without this the exit status is tee's, so a failed build reported success.
+status=${PIPESTATUS[0]}
+
+end_time=$(date)
+t2=$(date --date="$end_time" +%s)
+diff_time=$((t2 - t1))
+
+printf 'Total time for running Ansible Playbook: %02d:%02d:%02d\n' \
+    $((diff_time / 3600)) $((diff_time % 3600 / 60)) $((diff_time % 60)) \
+    | tee --append "$logfile"
+
+if [ "$status" -ne 0 ]; then
+    echo "Ansible exited with status ${status}. See ${logfile}." | tee --append "$logfile"
+fi
+
+exit "$status"

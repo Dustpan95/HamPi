@@ -1,6 +1,44 @@
-#!/bin/bash
+#!/usr/bin/env bash
+#
+# Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
+# Copyright 2024 - 2026, HamPi contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Extracts application names and version numbers from a playbook run log, to
+# compile the release notes for an image.
+#
+# Usage:
+#     ./scan_build_log_for_application_versions <logfile> [host]
+#
+# <logfile> is a log written by run_HamPi_playbook, under ansible-output/.
+# [host] is the inventory host name or address that appears in that log; its
+# lines are filtered out so the host itself is not mistaken for a version
+# number. It defaults to the HAMPI_SCAN_HOST environment variable if set.
+#
+# Previously the host was hardcoded to the original maintainer's LAN address,
+# so the filter silently did nothing for everyone else.
+#
 
-HOST="192.168.1.165"
-FILE=$1
+set -o pipefail
 
-egrep -v "changed: \[|ok: \[|skipping: \[|failed: |TASK \[Build |TASK \[Configure|TASK \[Install|TASK \[Remove|TASK \[Clean|TASK \[Autogen|TASK \[Bootstrap|TASK \[Set |${HOST}|PLAY \[HamPi" ${FILE} | grep -P "[0-9]+\.[0-9]+" | grep -Po "[A-Za-z]+ [0-9]+\.[0-9]+\.?[0-9]+"
+FILE="${1:-}"
+HOST="${2:-${HAMPI_SCAN_HOST:-}}"
+
+if [ -z "$FILE" ] || [ ! -f "$FILE" ]; then
+    echo "usage: $(basename "$0") <logfile> [host]" >&2
+    [ -n "$FILE" ] && [ ! -f "$FILE" ] && echo "error: no such file: ${FILE}" >&2
+    exit 1
+fi
+
+# Ansible progress lines carry version-like numbers of their own, so drop them
+# before looking for application versions.
+noise='changed: \[|ok: \[|skipping: \[|failed: |TASK \[Build |TASK \[Configure|TASK \[Install|TASK \[Remove|TASK \[Clean|TASK \[Autogen|TASK \[Bootstrap|TASK \[Set |PLAY \[HamPi'
+
+if [ -n "$HOST" ]; then
+    noise="${noise}|$(printf '%s' "$HOST" | sed 's/[][\.*^$(){}?+|/]/\\&/g')"
+fi
+
+grep -Ev "$noise" "$FILE" \
+    | grep -P "[0-9]+\.[0-9]+" \
+    | grep -Po "[A-Za-z]+ [0-9]+\.[0-9]+\.?[0-9]+"

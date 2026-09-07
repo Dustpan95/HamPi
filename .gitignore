@@ -59,3 +59,13 @@ files/usr/share/wallpapers/j-38 key.jpg
 files/usr/share/wallpapers/morse-code.jpg
 files/usr/share/wallpapers/r8600_Wallpaper_1600x1200.jpg
 files/usr/share/wallpapers/raspberry-pi-logo.png
+
+# Local Ansible inventory, copied from hosts.example. Contains site-specific
+# host names and possibly credentials, so it is deliberately not tracked.
+hosts
+
+# Playbook run logs written by run_HamPi_playbook.
+ansible-output/
+
+# Ansible retry files.
+*.retry
