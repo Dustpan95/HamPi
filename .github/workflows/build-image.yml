@@ -34,7 +34,8 @@ on:
         default: 'raspios_arm64_latest'
 
 permissions:
-  contents: read
+  # write, because a successful build publishes its image as a release.
+  contents: write
 
 jobs:
   image:
@@ -222,6 +223,82 @@ jobs:
           sudo umount "$MNT" || true
           sudo losetup -d "${{ steps.mount.outputs.loop }}" || true
 
+      - name: Boot the image under QEMU
+        # The one check continuous integration can make that resembles a real
+        # user's first five minutes: does this thing actually come up?
+        #
+        # -M raspi3b, not raspi4b: Ubuntu 24.04 ships QEMU 8.2, and raspi4b
+        # only arrived in QEMU 9.0. raspi3b models a Cortex-A53 with 1 GiB,
+        # which is enough to answer the question that matters -- whether the
+        # root filesystem mounts and userspace starts. QEMU's SD emulation
+        # also insists on a power-of-two image, which 16 GiB satisfies.
+        #
+        # This does not exercise the Pi bootloader, the VideoCore firmware,
+        # GPIO, audio or any radio hardware. It cannot replace putting the
+        # card in a Pi. What it does catch is the class of failure that makes
+        # an image useless to everyone: a root filesystem that will not mount,
+        # a broken package state, a system that never reaches userspace.
+        #
+        # Deliberately not a gate. It reports what it saw and does not fail
+        # the build, because a QEMU quirk should not block an image that is
+        # otherwise fine. Read the log.
+        if: always()
+        continue-on-error: true
+        timeout-minutes: 20
+        run: |
+          set -x
+          sudo apt-get install -y -qq qemu-system-arm
+          loop=$(sudo losetup -Pf --show "$IMG")
+          mkdir -p qemu boot-mnt
+          sudo mount "${loop}p1" boot-mnt
+          # Trixie ships several kernels; take the 64-bit one that raspi3b can
+          # run, and its matching device tree.
+          cp boot-mnt/kernel8.img qemu/ 2>/dev/null || cp boot-mnt/kernel_2712.img qemu/kernel8.img 2>/dev/null || true
+          cp boot-mnt/bcm2710-rpi-3-b-plus.dtb qemu/ 2>/dev/null || true
+          cp boot-mnt/initramfs8 qemu/ 2>/dev/null || true
+          ls -la qemu/ boot-mnt/ | head -30
+          sudo umount boot-mnt
+          sudo losetup -d "$loop"
+
+          if [ ! -f qemu/kernel8.img ] || [ ! -f qemu/bcm2710-rpi-3-b-plus.dtb ]; then
+            echo "No 64-bit kernel or device tree in the boot partition; cannot boot here."
+            exit 0
+          fi
+
+          initrd_arg=""
+          [ -f qemu/initramfs8 ] && initrd_arg="-initrd qemu/initramfs8"
+
+          set +e
+          timeout 900 qemu-system-aarch64 \
+            -M raspi3b \
+            -kernel qemu/kernel8.img \
+            -dtb qemu/bcm2710-rpi-3-b-plus.dtb \
+            $initrd_arg \
+            -drive file="$IMG",format=raw,if=sd \
+            -append "rw earlyprintk loglevel=8 console=ttyAMA0,115200 root=/dev/mmcblk0p2 rootfstype=ext4 rootwait fsck.repair=yes systemd.unit=multi-user.target" \
+            -serial mon:stdio -nographic -no-reboot \
+            > qemu/console.log 2>&1
+          echo "qemu exited: $?"
+          set -e
+
+          echo "==================== BOOT CONSOLE (tail) ===================="
+          tail -n 60 qemu/console.log || true
+          echo "============================================================="
+          echo "### Boot markers"
+          for marker in "Linux version" "Mounted /" "systemd" "Reached target" "login:" "Welcome to"; do
+            n=$(grep -c "$marker" qemu/console.log 2>/dev/null || echo 0)
+            printf '  %-20s %s\n' "$marker" "$n"
+          done
+
+      - name: Upload the boot console log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: qemu-boot-console
+          path: qemu/console.log
+          retention-days: 14
+          if-no-files-found: ignore
+
       - name: Package the image
         if: always()
         run: |
@@ -266,6 +343,44 @@ jobs:
           name: shackwright-image
           path: release/
           retention-days: 7
+
+      - name: Publish the image as a prerelease
+        # Releases, not git. The image is one to two gigabytes; GitHub rejects
+        # files over 100 MB in git, and even through LFS it would sit in the
+        # repository forever and be paid for on every clone. A release asset
+        # is the right home, and package_release.sh has already split the
+        # image into parts under the 2 GiB per-asset limit.
+        #
+        # Marked prerelease, and named so, because nothing here has been
+        # booted. It is a build artifact people can flash and try, not a
+        # release anyone should be told is finished.
+        if: steps.install.outputs.rc == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          tag="image-build-${GITHUB_RUN_NUMBER}"
+          gh release create "$tag" \
+            --title "Untested image build ${GITHUB_RUN_NUMBER}" \
+            --prerelease \
+            --notes "$(cat <<'NOTES'
+          Automated image build. **Not booted on hardware. Not a release.**
+
+          Built by chroot on a native arm64 runner from the official
+          Raspberry Pi OS Trixie arm64 image, with the package index
+          refreshed and the system dist-upgraded first.
+
+          Verify and flash per the RELEASE.md asset included here. If the
+          image is split into parts, reassemble them before flashing.
+
+          If you boot this, please report what happens — that is the one
+          thing continuous integration cannot establish.
+          NOTES
+          )" \
+            release/* || {
+              echo "Release publish failed; the image is still available as a workflow artifact."
+              exit 0
+            }
+          echo "Published $tag"
 
       - name: Upload logs
         if: always()
