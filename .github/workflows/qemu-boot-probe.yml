@@ -104,20 +104,38 @@ jobs:
         run: |
           mkdir -p probe
 
-          # Every configuration captures both UARTs and names both consoles on
-          # the kernel command line, so console routing cannot be the reason a
-          # configuration looks dead.
-          # Order matters and cost a round to work out. The kernel prints
-          # to every console= it is given, but /dev/console -- the one
-          # userspace and systemd actually write to -- is the LAST one
-          # listed. Round one had ttyS0 last, and on QEMU's raspi3b ttyS0 is
-          # the mini UART, which the Raspberry Pi device tree leaves
-          # unconfigured. Everything the kernel printed still arrived,
-          # because printk goes to all of them, so the log looked healthy;
-          # everything systemd printed went into a port that does not exist.
-          # ttyAMA0 goes last now.
-          common_append="rw rootwait earlycon loglevel=8 \
-          console=ttyS0,115200 console=ttyAMA0,115200"
+          # Both UARTs are captured every time, so a configuration that looks
+          # dead is dead rather than merely unrecorded.
+          #
+          # The console name, established the hard way over three rounds.
+          #
+          # Neither of the obvious names works on QEMU's raspi3b with a
+          # current Raspberry Pi OS kernel. The log from round three says so
+          # directly:
+          #
+          #   3f201000.serial: ttyAMA1 at MMIO 0x3f201000 ... is a PL011 rev2
+          #   bcm2835-aux-uart 3f215040.serial: unable to register 8250 port
+          #   bcm2835-aux-uart 3f215040.serial: probe ... failed with error -22
+          #   Warning: unable to open an initial console.
+          #
+          # The PL011 comes up as ttyAMA1, not ttyAMA0, and the mini UART --
+          # ttyS0 -- does not register at all under this machine model. So
+          # console=ttyS0 and console=ttyAMA0 both name devices that do not
+          # exist, the kernel cannot open /dev/console, systemd starts
+          # without one and dies, and the machine resets. Round three did
+          # that forty times in six hundred seconds.
+          #
+          # None of it was visible in the kernel log because earlycon writes
+          # straight to the aux UART's MMIO registers without needing a tty.
+          # Every boot looked flawless right up to the reset: root mounted,
+          # /sbin/init ran, systemd announced itself. That is three separate
+          # occasions in this one afternoon where output arriving somewhere
+          # unexpected looked exactly like a component working or failing.
+          #
+          # earlycon is kept so the early kernel messages still arrive on the
+          # aux UART, which is QEMU's second -serial. Once ttyAMA1 takes over
+          # the rest lands on the first. Both are captured, as always.
+          common_append="rw rootwait earlycon loglevel=8 console=ttyAMA1,115200"
 
           run_config() {
             name="$1"; shift
@@ -155,44 +173,24 @@ jobs:
             fi
           }
 
-          # Round 1 established the working shape and is not repeated:
+          # What the earlier rounds settled, so they are not repeated here:
           #
-          #   * the console is on the SECOND -serial, not the first. Every
-          #     raspi3b configuration wrote 19-21 KB to uart1 and exactly zero
-          #     bytes to uart0. A harness passing a single -serial records the
-          #     wrong port and sees nothing at all.
-          #   * raspi3b with bcm2710-rpi-3-b.dtb mounts ext4 from mmcblk0p2,
-          #     runs /sbin/init and starts systemd 257.13.
-          #   * passing -initrd initramfs8 breaks it. That configuration
-          #     panicked with "Attempted to kill init!". Do not pass one.
-          #
-          # What it did not do is finish. The log stops dead after
-          #
-          #     systemd[1]: Detected first boot.
-          #     systemd[1]: Initializing machine ID from random generator.
-          #
-          # and emits nothing for the remaining 228 seconds. The likely reason
-          # is systemd-firstboot, which on a first boot with nothing preset
-          # prompts on the console for locale, timezone and a root password.
-          # Our console is a file, so no answer can ever arrive and it waits
-          # forever. That is a property of booting an unconfigured image
-          # headless, not a fault in the image.
-          #
-          # This round tests that explanation. If systemd.firstboot=off gets
-          # the boot to a login prompt, the hypothesis is right and the image
-          # build can adopt this configuration.
+          #   * raspi3b with bcm2710-rpi-3-b.dtb mounts ext4 from mmcblk0p2
+          #     and runs /sbin/init. The machine model and the image are fine.
+          #   * the kernel talks on QEMU's SECOND -serial, because earlycon
+          #     binds the aux UART. A harness passing a single -serial records
+          #     the wrong port and sees nothing at all.
+          #   * do not pass -initrd initramfs8; that panics with "Attempted to
+          #     kill init!".
+          #   * systemd.firstboot=off is required, or a first boot with
+          #     nothing preset waits forever for a locale and a root password
+          #     that nobody can type into a file.
 
-          # Round two: systemd.firstboot=off turned a 240 second hang into a
-          # 14 second exit, which is what confirmed the hang was
-          # systemd-firstboot prompting on a console nobody could answer.
-          # But QEMU exited on its own well before the time limit, and with
-          # -no-reboot that means the guest asked to reset. Nothing in the
-          # log says why, because the reason would have gone to /dev/console.
-          #
-          # This round fixes the console ordering so systemd's own output is
-          # captured, and drops -no-reboot so a reset is survivable rather
-          # than fatal to the test.
-          run_config console-fixed \
+          # Round four. If naming a console that exists is the whole of it,
+          # this reaches a login prompt. If it does not, the reset has
+          # another cause and the log will now be able to say what, because
+          # systemd finally has somewhere to write.
+          run_config ttyama1 \
             -M raspi3b -kernel fw/kernel8.img -dtb fw/bcm2710-rpi-3-b.dtb \
             -drive file=stock.img,format=raw,if=sd \
             -append "${common_append} root=/dev/mmcblk0p2 \

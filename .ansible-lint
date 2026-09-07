@@ -13,11 +13,12 @@
 
 profile: min
 
-# Order matters: the first matching pattern wins. These four files are task
-# lists included by other playbooks, not playbooks themselves, so they must be
-# claimed before the tasks/*.yml playbook glob below.
+# Order matters: the first matching pattern wins. These files are task lists
+# included by other playbooks, not playbooks themselves, so they must be
+# claimed before the tasks/*.yml playbook glob below. Anything named
+# tasks/build_*.yml is one of these by convention.
 kinds:
-  - tasks: "tasks/build_HamClock_by_WB0OEW.yml"
+  - tasks: "tasks/build_*.yml"
   - tasks: "tasks/install_librtlsdr.yml"
   - tasks: "library/install_buster_repo.yml"
   - playbook: "tasks/*.yml"
