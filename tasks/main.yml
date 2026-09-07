@@ -112,6 +112,9 @@
 - import_playbook: install_adifmerg.yml
 - import_playbook: install_antenna_modeling_apps.yml
 - import_playbook: install_aprs_apps.yml
+# Graywolf: APRS modem, digipeater, iGate and web UI in one package, from
+# upstream's prebuilt .deb. Installed disabled; see tasks/install_graywolf.yml.
+- import_playbook: install_graywolf.yml
 - import_playbook: install_d-rats.yml
 - import_playbook: install_echolink_apps.yml
 - import_playbook: install_ham_training_apps.yml

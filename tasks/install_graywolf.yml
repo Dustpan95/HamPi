@@ -1,0 +1,131 @@
+#
+# Copyright 2024 - 2026, Shackwright contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Installs Graywolf, an APRS station by Chris Snell, NW5W: software modem,
+# digipeater, iGate and a browser UI in one package. The modem is written in
+# Rust and the station service in Go.
+#
+#   https://github.com/chrissnell/graywolf
+#
+# Upstream publishes prebuilt .deb packages for arm64, armv7l, armhf and
+# amd64, so nothing is compiled here. That matters: the alternative would be
+# pulling a Rust and a Go toolchain onto a Pi and building both.
+#
+# Graywolf is GPL-2.0 (its LICENSE file; note the packaging metadata in
+# upstream's .goreleaser.yml says MIT, which appears to be an oversight on
+# their side). Shipping it alongside this GPL-3.0 project is mere
+# aggregation -- separate programs on one image, not linked -- which is
+# exactly what every Linux distribution does.
+#
+# The service is deliberately left disabled. Upstream's postinstall enables
+# it, and its unit binds the web UI to 0.0.0.0:8080. On an image that is
+# flashed and handed around, that would put an unconfigured, unauthenticated
+# web interface on every card the moment it boots, before the operator has
+# even set a callsign. Enable it once configured:
+#
+#     sudo systemctl enable --now graywolf
+#
+
+---
+
+- name: Install Graywolf APRS station
+  hosts: all
+  tasks:
+
+    - name: Determine the Debian architecture for the Graywolf package
+      ansible.builtin.set_fact:
+        graywolf_arch: >-
+          {{ 'arm64' if (is_arm_64 | bool)
+             else ('armv7l' if ansible_architecture == 'armv7l'
+             else ('armhf' if ansible_architecture == 'armv6l'
+             else 'amd64')) }}
+
+    - name: Report the package that will be fetched
+      ansible.builtin.debug:
+        msg: >-
+          Architecture {{ ansible_architecture }} with a
+          {{ ansible_userspace_bits | default('?') }}-bit userland maps to the
+          {{ graywolf_arch }} Graywolf package.
+
+    - name: Look up the latest Graywolf release
+      # Queried rather than pinned. A hardcoded version is how the rest of
+      # this tree went stale: several apps here still pin releases from 2020.
+      # graywolf_version may be set to pin deliberately.
+      ansible.builtin.uri:
+        url: https://api.github.com/repos/chrissnell/graywolf/releases/latest
+        return_content: true
+        headers:
+          Accept: application/vnd.github+json
+      register: graywolf_release
+      retries: 3
+      delay: 10
+      until: graywolf_release is not failed
+      when: graywolf_version is not defined
+      check_mode: false
+
+    - name: Select the matching .deb asset
+      ansible.builtin.set_fact:
+        graywolf_deb_url: >-
+          {{ (graywolf_release.json.assets
+              | selectattr('name', 'match', '^graywolf_.*_' ~ graywolf_arch ~ '\.deb$')
+              | map(attribute='browser_download_url') | list | first) }}
+        graywolf_tag: "{{ graywolf_release.json.tag_name }}"
+      when: graywolf_version is not defined
+
+    - name: Build the download URL for a pinned version
+      ansible.builtin.set_fact:
+        graywolf_deb_url: >-
+          https://github.com/chrissnell/graywolf/releases/download/v{{ graywolf_version }}/graywolf_{{ graywolf_version }}_{{ graywolf_arch }}.deb
+        graywolf_tag: "v{{ graywolf_version }}"
+      when: graywolf_version is defined
+
+    - name: Report the release being installed
+      ansible.builtin.debug:
+        msg: "Installing Graywolf {{ graywolf_tag }} from {{ graywolf_deb_url }}"
+
+    - name: Download the Graywolf package
+      ansible.builtin.get_url:
+        url: "{{ graywolf_deb_url }}"
+        dest: /tmp/graywolf_{{ graywolf_arch }}.deb
+        mode: "0644"
+      retries: 5
+      delay: 30
+      register: graywolf_download
+      until: graywolf_download is not failed
+
+    - name: Install Graywolf
+      become: true
+      # Installed through apt rather than dpkg so its dependencies resolve.
+      ansible.builtin.apt:
+        deb: /tmp/graywolf_{{ graywolf_arch }}.deb
+        state: present
+      retries: 3
+      delay: 15
+      register: graywolf_install
+      until: graywolf_install is not failed
+
+    - name: Leave the Graywolf service disabled until it is configured
+      become: true
+      # Upstream's postinstall enables it, and the unit serves a web UI on
+      # 0.0.0.0:8080. An image is flashed by people who have not configured a
+      # callsign yet, and should not come up listening on every interface.
+      ansible.builtin.systemd_service:
+        name: graywolf
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Remove the downloaded package
+      become: true
+      ansible.builtin.file:
+        path: /tmp/graywolf_{{ graywolf_arch }}.deb
+        state: absent
+
+    - name: Explain how to turn Graywolf on
+      ansible.builtin.debug:
+        msg:
+          - "Graywolf {{ graywolf_tag }} installed and left disabled."
+          - "Configure it, then: sudo systemctl enable --now graywolf"
+          - "The web UI then listens on port 8080 on every interface."

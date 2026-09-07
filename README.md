@@ -263,7 +263,7 @@ The broad categories:
 * **FLDigi suite (W1HKJ)** — fldigi, flrig, flmsg, flamp, flnet, fllog, and the rest
 * **Digital modes** — WSJT-X, JTDX, JS8Call, MSHV, GridTracker, QSSTV, fldigi
 * **SDR** — SoapySDR and its driver modules, CubicSDR, GQRX, SDRAngel, quisk, OpenWebRX
-* **APRS and packet** — Xastir, YAAC, DireWolf, aprx, AX.25 tooling, LinPac
+* **APRS and packet** — Graywolf, Xastir, YAAC, aprx, AX.25 tooling, LinPac
 * **Logging** — CQRlog, KLog, PyQSO, TrustedQSL, tlf, xlog
 * **WinLink** — Pat, ARDOP, PMON
 * **Morse** — aldo, cwcp, qrq, ebook2cw, morse2ascii
