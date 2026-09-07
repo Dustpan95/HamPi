@@ -44,6 +44,22 @@
           Exactly one of is_rpi / is_pc / is_iq must be true, but got
           is_rpi={{ is_rpi }} is_pc={{ is_pc }} is_iq={{ is_iq }}.
 
+    - name: Assert the compile-time variables survive a standalone run
+      # Regression guard. shackwright_make_jobs was originally defined in
+      # default/main.yml, which only init_task.yml loads. Every playbook that
+      # compiles references it in its `environment:` keyword, so running any
+      # of them on their own failed the play before its first task with
+      # "'shackwright_make_jobs' is undefined". An arm64 trial build caught
+      # it; this catches it next time.
+      ansible.builtin.assert:
+        that:
+          - shackwright_make_jobs is defined
+          - shackwright_make_jobs | int >= 1
+          - shackwright_make_jobs | int <= (ansible_processor_vcpus | int)
+        fail_msg: >-
+          shackwright_make_jobs is {{ shackwright_make_jobs | default('undefined') }};
+          every compiling playbook fails before its first task.
+
     - name: Assert every platform fact is defined
       # Guards against a regression where a fact is only set inside a `when`,
       # leaving it undefined on other platforms. A `when: is_trixie|bool`

@@ -180,6 +180,15 @@
     # Most release-conditional tasks really mean "Bookworm or anything after
     # it" -- PEP 668 applies, Qt 5 moved, and so on. Deriving that once here
     # keeps those tasks from having to name every future release.
+    # Cap parallel compilation by memory as well as cores. This lives here
+    # rather than in default/main.yml because default/ is only loaded by
+    # init_task.yml, which leaves the value undefined for any playbook run on
+    # its own -- and every playbook that compiles references it in its
+    # environment, so an undefined value fails the play before a single task.
+    - name: Derive the parallel build job count
+      ansible.builtin.set_fact:
+        shackwright_make_jobs: "{{ [ansible_processor_vcpus | int, [1, (ansible_memtotal_mb | int // 1536)] | max] | min }}"
+
     - name: Set derived release facts
       ansible.builtin.set_fact:
         is_bookworm_or_newer: "{{ is_bookworm | bool or is_trixie | bool or is_forky | bool }}"

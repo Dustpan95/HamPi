@@ -39,7 +39,10 @@ pip_system_extra_args: "{{ '--break-system-packages' if (is_bookworm | bool or i
 # Cap the job count by memory as well as cores: roughly one job per 1.5 GB,
 # never more than the core count, never fewer than one. A 2 GB Pi builds
 # serially and slowly, which is far better than failing at hour two.
-shackwright_make_jobs: "{{ [ansible_processor_vcpus | int, [1, (ansible_memtotal_mb | int // 1536)] | max] | min }}"
+#
+# shackwright_make_jobs is set in library/set_facts.yml, not here. This file is
+# only loaded by init_task.yml, so a value defined here is undefined for any
+# playbook run on its own. Override it with -e if you need to.
 
 # Enlarge swap for the build on boards with less memory than this. Anything at
 # or above it has enough headroom that the default swap is fine.

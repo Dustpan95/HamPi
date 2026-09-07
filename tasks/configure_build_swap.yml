@@ -35,14 +35,14 @@
           {{ ansible_memtotal_mb }} MB RAM, {{ ansible_processor_vcpus }} CPUs;
           building with -j{{ shackwright_make_jobs }}.
           {{ 'Swap will be enlarged for the build.'
-             if (ansible_memtotal_mb | int < swap_ram_threshold_mb | int
+             if (ansible_memtotal_mb | int < (swap_ram_threshold_mb | default(8192) | int)
                  and dphys_conf.stat.exists)
              else 'Swap left as configured.' }}
 
     - name: Enlarge swap for the build
       when:
         - dphys_conf.stat.exists
-        - ansible_memtotal_mb | int < swap_ram_threshold_mb | int
+        - ansible_memtotal_mb | int < (swap_ram_threshold_mb | default(8192) | int)
       block:
 
         - name: Read the current swap configuration
@@ -73,7 +73,7 @@
           ansible.builtin.lineinfile:
             path: /etc/dphys-swapfile
             regexp: '^\s*#?\s*CONF_SWAPSIZE='
-            line: "CONF_SWAPSIZE={{ build_swap_size_mb }}"
+            line: "CONF_SWAPSIZE={{ build_swap_size_mb | default(4096) }}"
             state: present
 
         - name: Raise the swap ceiling
@@ -84,7 +84,7 @@
           ansible.builtin.lineinfile:
             path: /etc/dphys-swapfile
             regexp: '^\s*#?\s*CONF_MAXSWAP='
-            line: "CONF_MAXSWAP={{ build_swap_size_mb }}"
+            line: "CONF_MAXSWAP={{ build_swap_size_mb | default(4096) }}"
             state: present
 
         - name: Apply the new swap size

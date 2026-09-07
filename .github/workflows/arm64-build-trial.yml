@@ -93,13 +93,18 @@ jobs:
             echo "::group::$name"
             # ham_user is overridden to the runner's own account: the playbooks
             # expect a desktop login that does not exist on a hosted runner.
-            if ansible-playbook -i 'localhost,' -c local \
-                 -e ham_user="$USER" \
-                 library/set_facts.yml "tasks/${name}.yml" \
-                 2>&1 | tee "ansible-output/${name}.log"; then
+            # Take ansible-playbook's status, not tee's. `cmd | tee` reports
+            # the exit code of tee, which is always 0, so testing it directly
+            # reports every failed build as a pass.
+            ansible-playbook -i 'localhost,' -c local \
+              -e ham_user="$USER" \
+              library/set_facts.yml "tasks/${name}.yml" \
+              2>&1 | tee "ansible-output/${name}.log"
+            status=${PIPESTATUS[0]}
+            if [ "$status" -eq 0 ]; then
               echo "RESULT ${name}: PASS"
             else
-              echo "RESULT ${name}: FAIL"
+              echo "RESULT ${name}: FAIL (exit ${status})"
               rc=1
             fi
             echo "::endgroup::"
