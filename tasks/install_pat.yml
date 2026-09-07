@@ -77,122 +77,110 @@
       regexp: '^Categories=.*'
       line: Categories=HamRadio
 
+# Pat itself.
 #
-# Raspbian ARM
+# All three architecture blocks that used to live here found their version by
+# curling https://github.com/la5nta/pat/releases/ and running grep over the
+# rendered HTML. That returns nothing now, so the download URL became
+# ".../download/v/pat__linux_armhf.deb" and 404'd. Same defect as the fldigi
+# suite, same fix: ask for the version through an interface that is meant to
+# be parsed, and refuse to build a URL out of whatever comes back until it
+# has been checked.
 #
+# There was a second bug underneath the first, and it would have outlived it.
+# The ARM branch was guarded on is_arm alone and downloaded
+# pat_<ver>_linux_armhf.deb -- the 32-bit build -- on every Pi. Raspberry Pi
+# OS has been 64-bit by default for years; an armhf .deb does not install on
+# an arm64 system without multiarch. Upstream publishes an arm64 build and
+# this tree never asked for it. That is the same family as the is_arm_64 bug
+# already fixed in library/set_facts.yml, where is_arm_64 was true for 32-bit
+# userlands and made every 64-bit branch unreachable.
+#
+# Four near-identical blocks collapse into one, selected by architecture.
+#
+# Upstream rather than Debian, and deliberately: Debian trixie ships pat
+# 0.16.0 and upstream is at 1.0.0. A whole major version is too much to give
+# up on the WinLink client, and upstream ships proper signed .debs for every
+# architecture, so there is no source build to go wrong.
 
-  - name: Determine latest version of Pat (WinLink) (ARM) on GitHub
-    shell: curl --silent "https://github.com/la5nta/pat/releases/" | grep "pat.*_linux_armhf.deb" | head -n 1 | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq
-    register: pat_version
-    when: is_arm|bool
-    retries: 5
-    delay: 30
-    until: pat_version.failed == false
+  - name: Select the Pat package architecture
+    ansible.builtin.set_fact:
+      pat_arch: >-
+        {{ 'arm64' if (is_arm | bool and is_arm_64 | bool)
+           else 'armhf' if (is_arm | bool)
+           else 'amd64' if (is_x86_64 | bool)
+           else 'i386' if (is_i386 | bool)
+           else '' }}
 
-  - name: Download Pat {{ pat_version.stdout }} (WinLink) (ARM)
-    get_url:
-      url: https://github.com/la5nta/pat/releases/download/v{{ pat_version.stdout }}/pat_{{ pat_version.stdout }}_linux_armhf.deb
-      dest: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_armhf.deb
-    when: is_arm|bool
+  - name: Refuse to guess at an architecture for Pat
+    ansible.builtin.assert:
+      that:
+        - pat_arch | length > 0
+      fail_msg: >-
+        No Pat package is published for this architecture. Detected
+        is_arm={{ is_arm }} is_arm_64={{ is_arm_64 }}
+        is_x86_64={{ is_x86_64 }} is_i386={{ is_i386 }}.
+
+  - name: Determine the latest Pat release
+    # The releases API, not the releases page. The page is rendered HTML that
+    # changes shape whenever GitHub redesigns it, which is what broke this.
+    ansible.builtin.shell:
+      cmd: >-
+        curl -fsSL https://api.github.com/repos/la5nta/pat/releases/latest
+        | grep -Po '"tag_name"\s*:\s*"v?\K[^"]+'
+      executable: /bin/bash
+    register: pat_lookup
+    changed_when: false
+    failed_when: false
+    retries: 3
+    delay: 15
+    until: pat_lookup.rc == 0
+
+  - name: Refuse to continue without a real Pat version
+    ansible.builtin.assert:
+      that:
+        - pat_lookup.stdout | trim is match('^[0-9]+(\.[0-9]+)+$')
+      fail_msg: >-
+        Could not determine a Pat version from the GitHub releases API. Got
+        '{{ pat_lookup.stdout | trim }}'. Stopping rather than interpolating
+        that into a download URL, which is what the previous version of this
+        playbook did.
+      success_msg: "Pat {{ pat_lookup.stdout | trim }} ({{ pat_arch }})"
+
+  - name: Record the Pat version
+    ansible.builtin.set_fact:
+      pat_version: "{{ pat_lookup.stdout | trim }}"
+
+  - name: Download Pat {{ pat_version }} for {{ pat_arch }}
+    ansible.builtin.get_url:
+      url: >-
+        https://github.com/la5nta/pat/releases/download/v{{ pat_version
+        }}/pat_{{ pat_version }}_linux_{{ pat_arch }}.deb
+      dest: "/home/{{ ham_user }}/hamradio/pat_{{ pat_version }}_{{ pat_arch }}.deb"
+      mode: '0644'
     retries: 5
     delay: 30
     register: result
     until: result.failed == false
 
-  - name: Install Pat {{ pat_version.stdout }} (WinLink) (ARM)
+  - name: Install Pat {{ pat_version }}
     become: yes
-    apt:
-      deb: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_armhf.deb
-    when: is_arm|bool
+    ansible.builtin.apt:
+      deb: "/home/{{ ham_user }}/hamradio/pat_{{ pat_version }}_{{ pat_arch }}.deb"
 
-  - name: Remove latest Pat (WinLink) installer (ARM)
-    file:
-      path: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_armhf.deb
+  - name: Remove the Pat installer
+    ansible.builtin.file:
+      path: "/home/{{ ham_user }}/hamradio/pat_{{ pat_version }}_{{ pat_arch }}.deb"
       state: absent
-    when: is_arm|bool
 
   - name: Download Pi Ardop (ARM)
     become: yes
-    get_url:
+    ansible.builtin.get_url:
       url: http://www.cantab.net/users/john.wiseman/Downloads/Beta/piardopc
       dest: /usr/local/bin/piardopc
-    when: is_arm|bool
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Make Pi Ardop ARM executable
-    become: yes
-    file:
-      path: /usr/local/bin/piardopc
       mode: a+x
-    when: is_arm|bool
-
-#
-# Raspbian x86
-#
-
-  - name: Determine latest version of Pat (WinLink) (x86) on GitHub
-    shell: curl --silent "https://github.com/la5nta/pat/releases/" | grep "pat.*_linux_i386.deb" | head -n 1 | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq
-    register: pat_version
-    when: is_i386|bool
-    retries: 5
-    delay: 30
-    until: pat_version.failed == false
-
-  - name: Download Pat {{ pat_version.stdout }} (WinLink) (x86)
-    get_url:
-      url: https://github.com/la5nta/pat/releases/download/v{{ pat_version.stdout }}/pat_{{ pat_version.stdout }}_linux_i386.deb
-      dest: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_i386.deb
-    when: is_i386|bool
+    when: is_arm | bool
     retries: 5
     delay: 30
     register: result
     until: result.failed == false
-
-  - name: Install Pat {{ pat_version.stdout }} (WinLink) (x86)
-    become: yes
-    apt:
-      deb: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_i386.deb
-    when: is_i386|bool
-
-  - name: Remove latest Pat (WinLink) installer (x86)
-    file:
-      path: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_i386.deb
-      state: absent
-    when: is_i386|bool
-
-#
-# Raspbian amd64
-#
-
-  - name: Determine latest version of Pat (WinLink) (amd64) on GitHub
-    shell: curl --silent "https://github.com/la5nta/pat/releases/" | grep "pat.*_linux_amd64.deb" | head -n 1 | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq
-    register: pat_version
-    when: is_x86_64|bool
-    retries: 5
-    delay: 30
-    until: pat_version.failed == false
-
-  - name: Download latest Pat (WinLink) (amd64)
-    get_url:
-      url: https://github.com/la5nta/pat/releases/download/v{{ pat_version.stdout }}/pat_{{ pat_version.stdout }}_linux_amd64.deb
-      dest: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_amd64.deb
-    when: is_x86_64|bool
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Install latest Pat (WinLink) (amd64)
-    become: yes
-    apt:
-      deb: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_amd64.deb
-    when: is_x86_64|bool
-
-  - name: Remove latest Pat (WinLink) installer (amd64)
-    file:
-      path: /home/{{ ham_user }}/hamradio/pat_{{ pat_version.stdout }}_linux_amd64.deb
-      state: absent
-    when: is_x86_64|bool

@@ -45,13 +45,49 @@
   - name: Copy cty.dat to WSJT-X
     shell: cp /home/{{ ham_user }}/hamradio/CTY_FILES/cty.dat /home/{{ ham_user }}/.local/share/WSJT-X
 
-  - name: Determine latest version of BIGCTY on web
-    shell: curl --silent "https://www.country-files.com/" | grep -Po "https://www.country-files.com/bigcty/download/2023/bigcty-[0-9]+.zip" | head -n 1 | grep -Po "\-[0-9]+" | grep -Po "[0-9]+"
-    register: bigcty_version
+  # The BIGCTY block had the year baked into it, in both the pattern it
+  # searched for and the URL it built:
+  #
+  #   grep -Po "https://www.country-files.com/bigcty/download/2023/bigcty-[0-9]+.zip"
+  #   src: https://www.country-files.com/bigcty/download/2023/bigcty-{{ ... }}.zip
+  #
+  # country-files.com files each release under the year it was published, so
+  # the pattern stopped matching anything the moment 2023 ended and the
+  # download has been broken for every release since. It is 2026.
+  #
+  # The whole URL is taken from the page now rather than reassembled from a
+  # fragment of it, so the year is whatever the site says it is.
+  #
+  # The neighbouring CTY lookup above is left alone. Its "3630" looks like a
+  # corrupt year but is not -- country-files.com numbers CTY releases
+  # sequentially, 3630 is the current one, and that URL returns 200. It was
+  # checked before being touched.
+  - name: Find the current BIGCTY release
+    ansible.builtin.shell:
+      cmd: >-
+        curl -fsSL "https://www.country-files.com/"
+        | grep -oP 'https://www\.country-files\.com/bigcty/download/[0-9]{4}/bigcty-[0-9]+\.zip'
+        | head -1
+      executable: /bin/bash
+    register: bigcty_lookup
+    changed_when: false
+    failed_when: false
+    retries: 3
+    delay: 15
+    until: bigcty_lookup.rc == 0
 
-  - name: Download and Unarchive Big CTY {{ bigcty_version.stdout }} from http://www.country-files.com/
-    unarchive:
-      src: https://www.country-files.com/bigcty/download/2023/bigcty-{{ bigcty_version.stdout }}.zip
+  - name: Refuse to continue without a real BIGCTY URL
+    ansible.builtin.assert:
+      that:
+        - bigcty_lookup.stdout | trim is match('^https://www\.country-files\.com/bigcty/download/[0-9]{4}/bigcty-[0-9]+\.zip$')
+      fail_msg: >-
+        Could not find a BIGCTY download on country-files.com. Got
+        '{{ bigcty_lookup.stdout | trim }}'.
+      success_msg: "{{ bigcty_lookup.stdout | trim }}"
+
+  - name: Download and unarchive the current Big CTY
+    ansible.builtin.unarchive:
+      src: "{{ bigcty_lookup.stdout | trim }}"
       dest: /home/{{ ham_user }}/hamradio/CTY_FILES
       remote_src: yes
     retries: 5
