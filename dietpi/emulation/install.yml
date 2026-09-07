@@ -1,0 +1,15 @@
+---
+- name: Exercise shared package tasks in disposable Debian ARM64 userspace
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    station_platform:
+      environment: qemu-user-debian-container
+      architecture: arm64
+      dietpi_validated: false
+      board_validated: false
+  tasks:
+    - name: Apply the production package and record tasks only
+      ansible.builtin.import_tasks: ../roles/packages/tasks/software.yml
