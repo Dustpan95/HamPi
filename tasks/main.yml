@@ -202,6 +202,11 @@
 - import_playbook: terminate_ansible_early.yml
 - import_playbook: update_release_notes.yml
 
+# Seed /etc/skel from what the build produced, so an account created at
+# first boot inherits the configuration. Must run after every application
+# has written its user content, and before finish_tasks cleans up.
+- import_playbook: install_user_skeleton.yml
+
 # Final tasks
 - import_playbook: finish_tasks.yml
 

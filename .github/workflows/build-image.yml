@@ -180,6 +180,23 @@ jobs:
           echo "rc=$rc" >> "$GITHUB_OUTPUT"
           exit 0
 
+      - name: Seed /etc/skel inside the image
+        # Raspberry Pi OS ships no default account; the first-boot wizard
+        # creates one and the operator picks the name. Without this, every
+        # desktop entry, menu and config the build produced sits in an
+        # orphaned /home/pi that the new account cannot see, and the image
+        # looks broken for any operator who does not happen to choose "pi".
+        run: |
+          sudo -E "$(command -v ansible-playbook)" \
+            -i "${MNT}," -c community.general.chroot \
+            -e ham_user=pi \
+            -e pi_model_path=/etc/shackwright-pi-model \
+            -e ansible_python_interpreter=/usr/bin/python3 \
+            -e shackwright_image_build=true \
+            library/set_facts.yml tasks/install_user_skeleton.yml \
+            2>&1 | tee ansible-output/install_user_skeleton.log
+          exit ${PIPESTATUS[0]}
+
       - name: Finalize and unmount
         if: always()
         run: |

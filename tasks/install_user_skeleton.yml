@@ -1,0 +1,111 @@
+#
+# Copyright 2024 - 2026, Shackwright contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Copies the per-user content this build produced into /etc/skel, so that a
+# user account created later inherits it.
+#
+# Why this exists:
+#
+# Raspberry Pi OS has not shipped a default "pi" account since 2022. A fresh
+# image contains no user at all; the first-boot wizard, or Raspberry Pi
+# Imager's customization, creates one and the operator chooses the name.
+#
+# The playbooks install per-user content -- desktop entries, autostart files,
+# the FLdigi and Pat configuration, the helper scripts in bin/ -- into
+# /home/{{ ham_user }}. On a live machine that is the operator's own account
+# and everything lines up. On an image it does not: whoever flashes the card
+# picks their own username, gets a home built from /etc/skel, and sees none of
+# it. The applications are installed system-wide and work, but the menus,
+# desktop shortcuts and configuration are all in an orphaned /home/pi they do
+# not own. The image looks broken in a way that is hard to diagnose.
+#
+# Rather than rewrite ninety-four paths across the tree, the content is
+# written where it always was and then copied into /etc/skel here. Both cases
+# work: a live run leaves the operator's home as before and additionally
+# seeds skel for any later account, and an image build seeds skel for the
+# account the wizard is about to create.
+#
+# Build scratch is excluded. hamradio/ is where every source tree is cloned
+# and compiled, and it is removed by the individual playbooks anyway; nothing
+# in it belongs in a new user's home.
+#
+
+---
+
+- name: Seed /etc/skel with the per-user configuration
+  hosts: all
+  tasks:
+
+    - name: Check whether the build user's home exists
+      ansible.builtin.stat:
+        path: /home/{{ ham_user }}
+      register: skel_source
+
+    - name: Seed /etc/skel
+      when: skel_source.stat.exists
+      become: true
+      # Uses tar rather than rsync. rsync is not installed on a stock
+      # Raspberry Pi OS image, and making this task depend on installing it
+      # means the whole thing fails wherever that install cannot happen --
+      # which is exactly what happened the first time this was tested. tar is
+      # part of every Debian base system.
+      #
+      # The excludes matter as much as the copy. Shipping a shell history, an
+      # SSH private key or a credential cache into every account created from
+      # this image would be considerably worse than shipping no configuration.
+      ansible.builtin.shell:
+        cmd: >-
+          set -o pipefail &&
+          tar -C /home/{{ ham_user }}
+          --exclude=./hamradio
+          --exclude=./.cache
+          --exclude=./.ssh
+          --exclude=./.gnupg
+          --exclude=./.bash_history
+          --exclude=./.python_history
+          --exclude=./.wget-hsts
+          --exclude=./.sudo_as_admin_successful
+          --exclude=./.local/share/Trash
+          --exclude=./.config/pulse
+          -cf - .
+          | tar -C /etc/skel --no-same-owner -xf -
+        executable: /bin/bash
+      register: skel_sync
+      changed_when: true
+
+    - name: Make sure /etc/skel is owned by root
+      become: true
+      # useradd copies skel and chowns to the new account, but skel itself
+      # should not be owned by whichever account happened to build the image.
+      ansible.builtin.file:
+        path: /etc/skel
+        state: directory
+        owner: root
+        group: root
+        recurse: true
+        mode: u=rwX,go=rX
+
+    - name: List what a new account will inherit
+      ansible.builtin.command: find /etc/skel -maxdepth 2 -not -name skel
+      register: skel_contents
+      changed_when: false
+      failed_when: false
+
+    - name: Report the skeleton
+      ansible.builtin.debug:
+        msg: "{{ skel_contents.stdout_lines | default(['/etc/skel is empty']) }}"
+
+    #
+    # Image builds only. On a live machine the build user is the operator and
+    # their home must be left alone; in an image the account does not exist
+    # and its home is an orphan owned by root, which the first-boot wizard
+    # will not use and the operator will never look in.
+    #
+    - name: Remove the placeholder home from an image build
+      when: shackwright_image_build | default(false) | bool
+      become: true
+      ansible.builtin.file:
+        path: /home/{{ ham_user }}
+        state: absent

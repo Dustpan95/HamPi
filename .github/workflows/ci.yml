@@ -96,6 +96,12 @@ jobs:
       - name: Run platform detection tests
         run: ./tests/run_tests.sh
 
+      - name: Run /etc/skel seeding tests
+        # Guards what every account created from a released image inherits,
+        # and in particular what it must not: the build user's shell history,
+        # SSH keys or credential caches.
+        run: ./tests/test_skel.sh
+
       - name: Run release packaging tests
         # Covers the split-and-reassemble path. A release the downloader
         # cannot put back together would only fail after several gigabytes
