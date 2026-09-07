@@ -143,6 +143,28 @@ so a failed lookup stops with an explanation instead of a 404 or a fiction.
 `tests/test_removed_ansible_args.sh` runs in CI and fails if either comes
 back.
 
+**The emulated boot cannot reach a login prompt, and that is the emulator.**
+`.github/workflows/build-image.yml` boots every image it builds under QEMU.
+It gets as far as the root filesystem mounting, `/sbin/init` running, and
+systemd printing *Welcome to Debian GNU/Linux 13 (trixie)!* — then, about
+nine seconds later, the board resets. No shutdown sequence, no reboot
+request, no panic.
+
+This is not a fault in the images. It reproduces exactly on the stock,
+untouched Raspberry Pi OS image, which is why `qemu-boot-probe.yml` exists:
+it runs the same boot against stock so that any claim about a built image has
+a control behind it. QEMU's `raspi3b` does not model the Raspberry Pi
+firmware faithfully — the same boot logs `Failed to get GPIO 5 config` and
+`cam1_regulator: can't get GPIO`, and carries a watchdog whose emulated
+behaviour is not the hardware's.
+
+So the boot test's success marker is *root mounted and init started*, not a
+login prompt. That still catches what makes an image useless to everyone: a
+root filesystem that will not mount, a broken package state, a userspace that
+never starts. **It does not replace putting the card in a Pi, and no image
+here has been booted on real hardware.** Reports from anyone who does are the
+single most useful thing this project could receive right now.
+
 **17 applications are disabled.** `tasks/main.yml` imports 100 playbooks and
 has 17 commented out, most marked "broken under Bookworm" by upstream —
 including SDRAngel, SDR++, dump1090, rpitx, DroidStar, noaa-apt and the DRAWS

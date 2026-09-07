@@ -1,31 +1,51 @@
 ---
 name: QEMU boot probe
 
-# A control experiment, not part of the build.
+# A control experiment, not part of the build. Investigation complete; kept
+# for the next time the boot test needs debugging, and dispatch-only so it
+# does not run on its own.
 #
-# The first boot test in build-image.yml produced a 71-byte console log
-# containing nothing but QEMU's own "terminating on signal 15" message. QEMU
-# ran for the full 900 second timeout without erroring, so it loaded
-# something and executed it -- but not one line of kernel output reached the
-# file. That result says nothing about whether the image boots. It only says
-# the harness is not wired correctly, or the guest hangs before the first
-# printk.
+# WHAT FOUR ROUNDS ESTABLISHED, all against the STOCK Raspberry Pi OS image
+# so that nothing here is a verdict on an image we built:
 #
-# So: boot the STOCK Raspberry Pi OS image, untouched by us, under several
-# configurations at once. If stock produces no output either, the fault is in
-# the harness and the built image is not implicated. Whichever configuration
-# does produce a kernel banner is the one build-image.yml should use.
+#   * -M raspi3b with bcm2710-rpi-3-b.dtb boots. The kernel loads, ext4
+#     mounts from mmcblk0p2, /sbin/init runs, and systemd 257.13 starts and
+#     prints "Welcome to Debian GNU/Linux 13 (trixie)!".
+#   * capture BOTH -serial ports. The kernel talks on the second because
+#     earlycon binds the aux UART; after the handover the console is on the
+#     first. A harness with one -serial records a port nothing speaks on,
+#     which is how the first boot test produced a 71-byte log.
+#   * the console is ttyAMA1. The PL011 registers as ttyAMA1, not ttyAMA0,
+#     and the mini UART (ttyS0) does not register at all under this machine
+#     model. Naming either of the others leaves the kernel with no
+#     /dev/console; systemd starts without one and dies.
+#   * do not pass -initrd. The image's initramfs8 panics with "Attempted to
+#     kill init!".
+#   * systemd.firstboot=off, or a first boot with nothing preset waits
+#     forever for a locale and a root password nobody can type into a file.
 #
-# Both UARTs are captured every time. On a Pi 3 the PL011 (ttyAMA0) is
-# claimed by Bluetooth and the mini UART (ttyS0) carries the console; which
-# of the two QEMU wires to which -serial is exactly the sort of detail worth
-# not guessing about. Writing both to files and passing both on the kernel
-# command line removes the question.
+# WHAT IT DOES NOT DO is reach a login prompt. Roughly nine seconds after
+# systemd starts, the board resets -- no shutdown sequence, no reboot
+# request, no panic, just a reset, repeating for as long as the test runs.
+# Forty complete boots in six hundred seconds.
+#
+# That is an emulation artifact and not an image fault, and the reason we can
+# say so is that it happens on the stock image, which is the entire point of
+# having run a control. QEMU's raspi3b does not model the Raspberry Pi
+# firmware faithfully -- the same boot logs "Failed to get GPIO 5 config",
+# "cam1_regulator: can't get GPIO" and a bcm2835-wdt watchdog whose behaviour
+# under emulation is not the hardware's. Chasing a login prompt inside a
+# machine model that cannot supply one is not worth further rounds.
+#
+# So the boot test in build-image.yml treats "root mounted and init started"
+# as its success marker rather than a login prompt. That still catches the
+# class of failure that makes an image useless to everyone: a root filesystem
+# that will not mount, a broken package state, a userspace that never starts.
+# It does not and cannot replace putting the card in a Pi.
 
 on:
-  push:
-    branches: [BetaTesting]
-    paths: ['.github/workflows/qemu-boot-probe.yml']
+  # Dispatch only. The investigation this was built for is finished, and it
+  # burns ten minutes of a runner per push.
   workflow_dispatch:
     inputs:
       seconds:
