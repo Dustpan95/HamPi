@@ -1,0 +1,137 @@
+---
+name: ARM64 build trial
+
+# Runs the real playbook against a native arm64 runner. Everything else in CI
+# checks that the code is well formed; this is the only thing that checks
+# whether it actually builds anything.
+#
+# It is not a release build and it is not a substitute for a Raspberry Pi. The
+# runner is Ubuntu, not Raspberry Pi OS, and it is headless, so anything
+# touching the desktop will not be exercised. What it does prove is whether the
+# source builds compile on aarch64 against a current Debian-family userland,
+# which is what has actually been failing.
+#
+# Manual only. A job is capped at six hours and the full catalogue will not fit
+# in that, so pick the playbooks worth the minutes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      playbooks:
+        description: 'Comma-separated playbooks under tasks/ to run'
+        required: true
+        default: 'install_hamlib'
+      timeout_minutes:
+        description: 'Give up after this many minutes (max 350)'
+        required: false
+        default: '120'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build on native arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: ${{ fromJSON(inputs.timeout_minutes) }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report the machine we actually got
+        run: |
+          echo "arch:    $(uname -m)"
+          echo "kernel:  $(uname -r)"
+          echo "cores:   $(nproc)"
+          echo "memory:  $(free -h | awk '/Mem:/{print $2}')"
+          echo "userland bits: $(getconf LONG_BIT)"
+          echo "distro:  $(. /etc/os-release && echo "$PRETTY_NAME")"
+          echo
+          df -h / | tail -1
+
+      - name: Reclaim disk space
+        # Hosted runners ship with several gigabytes of toolchains this build
+        # has no use for, and a source build of this size needs the room.
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+          df -h / | tail -1
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Ansible
+        run: python3 -m pip install -r requirements.txt
+
+      - name: Confirm platform detection on real arm64 hardware
+        # The detection was written and unit tested on x86. This is the first
+        # time it runs on the architecture it exists to identify.
+        run: |
+          ansible-playbook -i 'localhost,' -c local \
+            -e ham_user="$USER" \
+            library/set_facts.yml
+
+      - name: Run the selected playbooks
+        id: build
+        continue-on-error: true
+        env:
+          PLAYBOOKS: ${{ inputs.playbooks }}
+        run: |
+          mkdir -p ansible-output
+          rc=0
+          IFS=',' read -ra list <<< "$PLAYBOOKS"
+          for name in "${list[@]}"; do
+            name="$(echo "$name" | xargs)"      # trim
+            [ -n "$name" ] || continue
+            echo "::group::$name"
+            # ham_user is overridden to the runner's own account: the playbooks
+            # expect a desktop login that does not exist on a hosted runner.
+            if ansible-playbook -i 'localhost,' -c local \
+                 -e ham_user="$USER" \
+                 library/set_facts.yml "tasks/${name}.yml" \
+                 2>&1 | tee "ansible-output/${name}.log"; then
+              echo "RESULT ${name}: PASS"
+            else
+              echo "RESULT ${name}: FAIL"
+              rc=1
+            fi
+            echo "::endgroup::"
+          done
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Summarize
+        run: |
+          {
+            echo "## ARM64 build trial"
+            echo
+            echo "| Playbook | Result |"
+            echo "|---|---|"
+            for log in ansible-output/*.log; do
+              [ -f "$log" ] || continue
+              name=$(basename "$log" .log)
+              if grep -qE 'failed=[1-9]|ERROR!|fatal:' "$log"; then
+                echo "| \`${name}\` | FAIL |"
+              else
+                echo "| \`${name}\` | pass |"
+              fi
+            done
+            echo
+            echo "Disk remaining: $(df -h / | tail -1 | awk '{print $4}')"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ansible-output
+          path: ansible-output/
+          retention-days: 14
+
+      - name: Fail the job if any playbook failed
+        if: steps.build.outputs.rc != '0'
+        run: |
+          echo "One or more playbooks failed. See the logs artifact."
+          exit 1
