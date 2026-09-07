@@ -364,9 +364,13 @@ jobs:
           sudo rm -rf "$MNT"/var/cache/apt/archives/*.deb
           sudo rm -rf "$MNT"/var/log/*.log "$MNT"/var/log/journal/* || true
 
-          # Zero the free space so the image compresses to near its real size.
-          sudo dd if=/dev/zero of="$MNT/zero.fill" bs=4M status=none || true
-          sudo rm -f "$MNT/zero.fill"
+          # The free space is NOT zeroed here. It used to be, and that was
+          # wrong once the shrink existed: zeroing at 16 GiB, then compacting
+          # the filesystem and growing it back by 512 MiB of slack, left that
+          # slack full of relocated stale blocks. They compressed at about
+          # 3.9:1 and added 139 MB to the download -- build 12 shipped LARGER
+          # than build 11, which had no shrink at all. Zeroing now happens
+          # after the shrink, where the free space is final.
           sudo sync
 
           for d in run dev/pts dev sys proc; do sudo umount -l "$MNT/$d" || true; done
@@ -440,6 +444,17 @@ jobs:
             echo "fsck failed after the shrink; refusing to ship this image"
             exit 1
           fi
+
+          # Zero the free space now, not before the shrink. What is left is
+          # the 512 MiB of slack, and zeroes compress to almost nothing.
+          mkdir -p shrinkmnt
+          loop=$(sudo losetup --find --show -o $((start * 512)) "$IMG")
+          sudo mount "$loop" shrinkmnt
+          sudo dd if=/dev/zero of=shrinkmnt/zero.fill bs=4M status=none || true
+          sudo rm -f shrinkmnt/zero.fill
+          sudo sync
+          sudo umount shrinkmnt
+          sudo losetup -d "$loop"
 
           after=$(stat -c%s "$IMG")
           printf 'shrank %s -> %s bytes (%s%% smaller)\n' \

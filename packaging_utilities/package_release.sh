@@ -81,7 +81,13 @@ echo
 # -T0 uses every core. An image is mostly zeroes in its free space, which xz
 # collapses to almost nothing, so this is far smaller than the card size.
 echo "Compressing (this takes a while) ..."
-xz --threads=0 --compress --stdout -6 "$IMAGE" > "${OUTDIR}/${BASE}.img.xz"
+# -9e, not -6. The image is about 2.1 GB compressed and GitHub caps a single
+# release asset at 2 GiB, so a few percent decides whether this ships as one
+# file or as parts a downloader has to reassemble by hand -- which Raspberry
+# Pi Imager cannot read at all. Extreme mode costs build time on a runner that
+# has it to spare. It is not guaranteed to be enough; the split path remains
+# for when it is not.
+xz --threads=0 --compress --stdout -9e "$IMAGE" > "${OUTDIR}/${BASE}.img.xz"
 
 compressed_size=$(stat -c %s "${OUTDIR}/${BASE}.img.xz")
 echo "  compressed to $(numfmt --to=iec --suffix=B "$compressed_size" 2>/dev/null || echo "${compressed_size} bytes")"
