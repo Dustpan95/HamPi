@@ -214,6 +214,80 @@ jobs:
             2>&1 | tee ansible-output/install_user_skeleton.log
           exit ${PIPESTATUS[0]}
 
+      - name: Record what is in the image
+        # Anyone who flashes a card is entitled to know what is on it. Until
+        # now a release said only "untested image build N", which gives the
+        # build number and nothing about the software.
+        #
+        # Read from the image itself rather than from the playbook list,
+        # because those are different things: a playbook can report success
+        # having skipped every task in it, which is exactly how ten playbooks
+        # in this tree "install" dependencies that only exist on Buster. dpkg
+        # is the authority on what actually landed.
+        #
+        # Runs before the unmount, since it needs the chroot. Native, not
+        # emulated -- the runner is arm64 and so is the image.
+        if: always()
+        run: |
+          pat='ham|fldigi|flrig|flamp|flmsg|flwrap|flnet|flaa|fllog'
+          pat="${pat}|flcluster|flwkey|flxmlrpc|chirp|quisk|qdmr|voacap"
+          pat="${pat}|pythonprop|soapy|rtl-sdr|librtlsdr|airspy|hackrf"
+          pat="${pat}|bladerf|limesuite|uhd|gpredict|wsjt|js8|direwolf"
+          pat="${pat}|ax25|gqrx|cubicsdr|trustedqsl|twclock|freedv|xastir"
+          pat="${pat}|gridtracker|graywolf"
+
+          local_bin=$(sudo chroot "$MNT" \
+            sh -c 'ls -1 /usr/local/bin 2>/dev/null' || true)
+          radio=$(sudo chroot "$MNT" \
+            dpkg-query -W -f='${Package}\t${Version}\n' 2>/dev/null \
+            | grep -iE "$pat" | sort || true)
+
+          {
+            echo "Shackwright image contents"
+            echo "Built $(date -u +%Y-%m-%dT%H:%M:%SZ) from ${GITHUB_SHA}"
+            echo "Build ${GITHUB_RUN_NUMBER}"
+            echo
+            echo "== Base =="
+            sudo chroot "$MNT" grep -E '^(PRETTY_NAME|VERSION)=' \
+              /etc/os-release 2>/dev/null | sed 's/^/  /' || echo "  unknown"
+            echo "  kernels: $(sudo chroot "$MNT" sh -c \
+              'ls -1 /lib/modules 2>/dev/null | tr "\n" " "')"
+            echo
+            echo "== Amateur radio packages from Debian =="
+            # Captured first rather than piped straight through. "|| echo"
+            # on a pipeline tests the LAST command, which is sed and always
+            # succeeds, so a grep that matched nothing printed an empty
+            # section and no warning -- an empty result that reads as a
+            # result. That mistake has cost enough time today.
+            if [ -n "$radio" ]; then
+              printf '%s\n' "$radio" | sed 's/^/  /'
+            else
+              echo "  NONE MATCHED -- either nothing was installed or the"
+              echo "  pattern above needs updating. This is not a pass."
+            fi
+            echo
+            echo "== Built from source, not managed by apt =="
+            if [ -n "$local_bin" ]; then
+              printf '%s\n' "$local_bin" | sed 's|^|  /usr/local/bin/|'
+            else
+              echo "  none"
+            fi
+            echo
+            echo "== Totals =="
+            printf '  packages installed: %s\n' \
+              "$(sudo chroot "$MNT" dpkg-query -f '.\n' -W 2>/dev/null | wc -l)"
+          } | tee image-manifest.txt
+
+          {
+            echo "<details><summary>Image contents</summary>"
+            echo
+            echo '```'
+            cat image-manifest.txt
+            echo '```'
+            echo
+            echo "</details>"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Finalize and unmount
         if: always()
         run: |
@@ -374,6 +448,9 @@ jobs:
           sudo chown "$USER" "$IMG"
           version="0.0.0-ci-${GITHUB_RUN_NUMBER}"
           packaging_utilities/package_release.sh "$IMG" "$version" release
+          # Ship the manifest alongside the image so a downloader can see
+          # what is in it without flashing a card first.
+          [ -f image-manifest.txt ] && cp image-manifest.txt release/
           ls -lh release/
 
       - name: Summarize
