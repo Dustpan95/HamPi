@@ -134,6 +134,25 @@ jobs:
           printf 'Raspberry Pi 5 Model B Rev 1.0\0' \
             | sudo tee "$MNT/etc/shackwright-pi-model" >/dev/null
 
+      - name: Refresh the package index inside the image
+        # The base image ships the apt lists it was built with. Debian moves
+        # on: by the time the image is used, the exact versions those lists
+        # name have been superseded and removed from the pool, and every
+        # install 404s. The first build failed exactly this way, on
+        # libxml2-dev, liblzma-dev and libxpm-dev.
+        #
+        # Updating the index is the minimum. Upgrading as well means the image
+        # ships current packages rather than whatever was current on the day
+        # the base image was cut, which for a security-relevant thing like an
+        # SSH server matters.
+        run: |
+          sudo chroot "$MNT" apt-get update
+          sudo chroot "$MNT" apt-get -y \
+            -o Dpkg::Options::=--force-confdef \
+            -o Dpkg::Options::=--force-confold \
+            dist-upgrade
+          sudo chroot "$MNT" apt-get -y autoremove
+
       - name: Install Shackwright into the image
         id: install
         run: |
