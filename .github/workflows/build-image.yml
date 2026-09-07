@@ -236,8 +236,28 @@ jobs:
           pat="${pat}|ax25|gqrx|cubicsdr|trustedqsl|twclock|freedv|xastir"
           pat="${pat}|gridtracker|graywolf"
 
-          local_bin=$(sudo chroot "$MNT" \
-            sh -c 'ls -1 /usr/local/bin 2>/dev/null' || true)
+          # Everything in the executable directories that no package owns.
+          #
+          # The first version of this listed /usr/local/bin only, which missed
+          # the software people actually came for: the w1hkj programs
+          # ./configure --prefix=/usr, so fldigi, flarq and flnet install into
+          # /usr/bin. Build 8's manifest therefore showed hamlib's rigctl and
+          # nothing else, and a manifest that omits the flagship application
+          # is worse than no manifest.
+          #
+          # Regular files only. update-alternatives fills these directories
+          # with symlinks -- awk, cc, editor, java and about a hundred more --
+          # which no package owns either, and including them buried the real
+          # entries 4:1.
+          local_bin=$(sudo chroot "$MNT" sh -c '
+            cat /var/lib/dpkg/info/*.list 2>/dev/null \
+              | grep -E "^/usr/(bin|sbin|local/bin|local/sbin)/" \
+              | sort -u > /tmp/.owned
+            find /usr/bin /usr/sbin /usr/local/bin /usr/local/sbin \
+              -maxdepth 1 -type f 2>/dev/null | sort -u > /tmp/.present
+            comm -23 /tmp/.present /tmp/.owned
+            rm -f /tmp/.owned /tmp/.present
+          ' || true)
           radio=$(sudo chroot "$MNT" \
             dpkg-query -W -f='${Package}\t${Version}\n' 2>/dev/null \
             | grep -iE "$pat" | sort || true)
@@ -268,7 +288,9 @@ jobs:
             echo
             echo "== Built from source, not managed by apt =="
             if [ -n "$local_bin" ]; then
-              printf '%s\n' "$local_bin" | sed 's|^|  /usr/local/bin/|'
+              printf '%s\n' "$local_bin" | sed 's/^/  /'
+              printf '  (%s executables)\n' \
+                "$(printf '%s\n' "$local_bin" | wc -l)"
             else
               echo "  none"
             fi
