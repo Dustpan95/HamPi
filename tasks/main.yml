@@ -65,6 +65,10 @@
 #
 - import_playbook: install_soapy.yml
 
+# Applications Debian packages that this tree used to compile. Restores
+# GQRX, CubicSDR, TrustedQSL, twclock and FreeDV. See install_distro_apps.yml.
+- import_playbook: install_distro_apps.yml
+
 # Still built from source, because Debian does not package them.
 - import_playbook: install_soapy_multi.yml
 - import_playbook: install_soapy_netsdr.yml
@@ -102,8 +106,8 @@
 #- import_playbook: install_cutesdr.yml
 ### DJS SKIP FOR NOW - import_playbook: install_leansdr.yml
 ### DJS SKIP FOR NOW - import_playbook: install_lysdr.yml
-### DJS SKIP FOR NOW - import_playbook: install_gqrx.yml
-### DJS SKIP FOR NOW - import_playbook: install_cubicsdr.yml
+# install_gqrx.yml: replaced by the gqrx-sdr package (install_distro_apps.yml)
+# install_cubicsdr.yml: replaced by the cubicsdr package (install_distro_apps.yml)
 ### DJS SKIP FOR NOW - import_playbook: install_sdrplusplus.yml
 
 #- import_playbook: install_sdrangel.yml
@@ -144,13 +148,13 @@
 - import_playbook: install_quisk.yml
 - import_playbook: install_pmon.yml
 - import_playbook: install_pybombs.yml
-### Build broken under Bookworm - import_playbook: install_tqsl.yml
+# install_tqsl.yml: replaced by the trustedqsl package (install_distro_apps.yml)
 - import_playbook: install_boinc.yml
 - import_playbook: install_qslware.yml
-### DJS Website gone - import_playbook: install_twclock.yml
+# install_twclock.yml: replaced by the twclock package (install_distro_apps.yml)
 ### DJS Website gone - import_playbook: install_twhamqth.yml
 - import_playbook: install_wxtoimg.yml
-### Build broken under Bookworm - import_playbook: install_freedv.yml
+# install_freedv.yml: replaced by the freedv package (install_distro_apps.yml)
 ### Build broken under Bookworm - import_playbook: install_dump1090.yml
 - import_playbook: install_acarsdec.yml
 - import_playbook: install_voacapl.yml

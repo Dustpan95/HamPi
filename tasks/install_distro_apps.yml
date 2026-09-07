@@ -1,0 +1,75 @@
+#
+# Copyright 2024 - 2026, Shackwright contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Applications this tree used to compile from source that Debian now
+# packages. Same pattern as tasks/install_soapy.yml: where the distribution
+# ships it, install it, and delete the build.
+#
+# Every package here was checked against Debian 13 (Trixie) for arm64, not
+# just against whatever the build machine happened to be running. That check
+# mattered -- cutesdr and dump1090 look available on Ubuntu and are absent
+# from Trixie, so both were dropped from this list rather than shipped as a
+# task that fails on the actual target.
+#
+
+---
+
+- name: Install applications packaged by the distribution
+  hosts: all
+  tasks:
+
+    - name: Install ham radio applications from the distribution
+      become: true
+      ansible.builtin.package:
+        name:
+          # Replaces install_cubicsdr.yml.
+          - cubicsdr
+          # Replaces install_tqsl.yml, which fetched a tarball from arrl.org.
+          # This is TrustedQSL, for signing Logbook of the World uploads.
+          - trustedqsl
+          # Replaces install_twclock.yml. Its upstream, wa0eir.bcts.info, no
+          # longer exists, which is why it was disabled and why the README
+          # called it unrepairable. Debian still carries it.
+          - twclock
+          # Replaces install_freedv.yml, the digital voice mode.
+          - freedv
+        state: present
+      retries: 5
+      delay: 30
+      register: distro_apps
+      until: distro_apps is not failed
+
+    - name: Install GQRX without its recommended packages
+      become: true
+      # Kept separate and with recommends off, deliberately. gqrx-sdr reaches
+      # libxtrxll0t64, which *recommends* xtrx-dkms -- a DKMS package that
+      # compiles a kernel module at install time. That is precisely what broke
+      # the twelve SoapySDR playbooks for two years: where the module cannot
+      # build, apt fails and the play dies.
+      #
+      # Confirmed here: with recommends, apt installs dkms and xtrx-dkms;
+      # without, it installs neither and gqrx still gets all 85 of its actual
+      # dependencies. xtrx-dkms serves the XTRX, an uncommon device; anyone
+      # who owns one can install it deliberately.
+      #
+      # This also replaces install_gqrx.yml, whose source build pinned
+      # libgnuradio-osmosdr0.1.4 and 0.2.0 by soname -- names absent from any
+      # current release, so it could not have succeeded either.
+      ansible.builtin.apt:
+        name: gqrx-sdr
+        state: present
+        install_recommends: false
+      retries: 5
+      delay: 30
+      register: gqrx_install
+      until: gqrx_install is not failed
+
+    - name: Report what was installed
+      ansible.builtin.debug:
+        msg:
+          - "Installed from the distribution: cubicsdr, trustedqsl, freedv,"
+          - "twclock, and gqrx-sdr without its DKMS recommends. Each replaces"
+          - "a source build that had been disabled -- twclock's because its"
+          - "upstream website no longer exists."

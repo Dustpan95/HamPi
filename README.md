@@ -161,9 +161,10 @@ GQRX, CubicSDR, FreeDV, dump1090, TQSL, and the DRAWS hat support. Each needs
 to be tried against Trixie and either repaired or retired. They all still pass
 a syntax check, so re-enabling one is a one-line change.
 
-Two of them cannot be repaired at all: `install_twclock` and
-`install_twhamqth` fetch from a website that no longer exists. They need a new
-upstream source or retirement.
+One of them cannot be repaired: `install_twhamqth` fetches from
+`wa0eir.bcts.info`, which no longer exists, and no distribution packages it.
+`install_twclock` fetched from the same dead site, but Debian still carries
+`twclock`, so it is restored from the package rather than retired.
 
 **SDR support is restored.** This was 12 of the 34. Every SoapySDR driver
 module was disabled as "build broken under Bookworm", and an arm64 trial found
