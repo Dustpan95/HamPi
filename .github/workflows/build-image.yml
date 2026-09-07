@@ -374,6 +374,77 @@ jobs:
           sudo umount "$MNT" || true
           sudo losetup -d "${{ steps.mount.outputs.loop }}" || true
 
+      - name: Shrink the image to its contents
+        # The build grows the image to 16 GiB so there is room to compile in,
+        # and almost none of that is used. Zeroing the free space makes it
+        # compress well, but the partition is still full size, so the
+        # compressed artifact came to 2.14 GB. GitHub caps one release asset
+        # at 2 GiB, so it shipped as two files a downloader has to reassemble
+        # by hand -- and Raspberry Pi Imager cannot read a split file, so the
+        # one-click path the instructions advertise did not exist.
+        #
+        # Shrinking the root filesystem to its contents plus slack is what the
+        # official Raspberry Pi images do. Raspberry Pi OS expands the root
+        # partition to fill the card on first boot, so nothing is lost, and
+        # the image becomes flashable to a smaller card.
+        #
+        # A note on parted, because this silently did nothing the first time
+        # it was written: "parted -s ... resizepart" REFUSES to shrink. It
+        # prints "Shrinking a partition can cause data loss, are you sure",
+        # answers no on its own in script mode, and exits 0 having changed
+        # nothing. The filesystem shrinks, the partition does not, the image
+        # ships at full size, and no error appears anywhere. Deleting the
+        # partition and recreating it at the same start sector does the job
+        # without a prompt and leaves the filesystem exactly where it is.
+        #
+        # Verified on a miniature two-partition image before being written
+        # here: 1 GiB down to 288 MB, fsck clean afterwards, and sha256 of the
+        # contents identical across the shrink.
+        run: |
+          set -eux
+          before=$(stat -c%s "$IMG")
+
+          start=$(sudo parted -sm "$IMG" unit s print \
+            | awk -F: '/^2:/{gsub(/s/,"",$2); print $2}')
+          loop=$(sudo losetup --find --show -o $((start * 512)) "$IMG")
+
+          sudo e2fsck -fy "$loop" || true
+          sudo resize2fs -M "$loop"
+
+          # Minimum plus slack, so a flashed card is not at 100% full before
+          # the first-boot expansion runs.
+          blk=$(sudo dumpe2fs -h "$loop" 2>/dev/null \
+            | awk -F: '/Block size/{gsub(/ /,"",$2); print $2}')
+          cnt=$(sudo dumpe2fs -h "$loop" 2>/dev/null \
+            | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+          sudo resize2fs "$loop" $(( cnt + (512 * 1024 * 1024 / blk) ))
+
+          blk=$(sudo dumpe2fs -h "$loop" 2>/dev/null \
+            | awk -F: '/Block size/{gsub(/ /,"",$2); print $2}')
+          cnt=$(sudo dumpe2fs -h "$loop" 2>/dev/null \
+            | awk -F: '/Block count/{gsub(/ /,"",$2); print $2}')
+          sudo losetup -d "$loop"
+
+          endsec=$(( start + (cnt * blk / 512) - 1 ))
+          sudo parted -s "$IMG" rm 2
+          sudo parted -s "$IMG" unit s mkpart primary ext4 "${start}s" "${endsec}s"
+          truncate -s $(( (endsec + 1) * 512 )) "$IMG"
+
+          # Never ship an image that will not survive a check. A smaller
+          # broken image is worse than a large working one.
+          loop=$(sudo losetup --find --show -o $((start * 512)) "$IMG")
+          if sudo e2fsck -fn "$loop"; then
+            sudo losetup -d "$loop"
+          else
+            sudo losetup -d "$loop"
+            echo "fsck failed after the shrink; refusing to ship this image"
+            exit 1
+          fi
+
+          after=$(stat -c%s "$IMG")
+          printf 'shrank %s -> %s bytes (%s%% smaller)\n' \
+            "$before" "$after" "$(( 100 - after * 100 / before ))"
+
       - name: Boot the image under QEMU
         # The one check CI can make that resembles a real user's first five
         # minutes: does this thing actually come up?
@@ -439,6 +510,19 @@ jobs:
             exit 0
           fi
 
+          # QEMU's SD model insists on a power-of-two image, and the image
+          # is no longer one now that it is shrunk to its contents. Pad a
+          # sparse copy up to the next power of two rather than the original,
+          # which costs no real disk and is also a more honest test: it is
+          # exactly what a card looks like after a small image is flashed to
+          # a larger one.
+          sz=$(stat -c%s "$IMG")
+          pot=1048576
+          while [ "$pot" -lt "$sz" ]; do pot=$((pot * 2)); done
+          cp --sparse=always "$IMG" qemu/sd.img
+          truncate -s "$pot" qemu/sd.img
+          echo "image ${sz} bytes, padded to ${pot} for QEMU"
+
           : > qemu/uart0.log
           : > qemu/uart1.log
           set +e
@@ -446,7 +530,7 @@ jobs:
             -M raspi3b \
             -kernel qemu/kernel8.img \
             -dtb qemu/bcm2710-rpi-3-b.dtb \
-            -drive file="$IMG",format=raw,if=sd \
+            -drive file=qemu/sd.img,format=raw,if=sd \
             -append "rw rootwait earlycon loglevel=8 \
             console=ttyAMA1,115200 \
             root=/dev/mmcblk0p2 rootfstype=ext4 \

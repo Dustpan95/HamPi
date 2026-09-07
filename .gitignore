@@ -69,3 +69,6 @@ ansible-output/
 
 # Ansible retry files.
 *.retry
+
+# Local ansible runtime cache, created by running the playbooks here.
+.ansible/

@@ -35,8 +35,17 @@ set -euo pipefail
 # room to spare, so a part is never rejected at upload time. Both are
 # overridable so the split and reassembly path can be exercised in tests
 # without generating gigabytes of data.
+# GitHub caps a single release asset at 2 GiB. The threshold was 1900 MiB,
+# which was conservative to the point of being wrong: build 11's compressed
+# image came to 2,139,297,936 bytes -- about 8 MB UNDER the real cap -- and
+# was split anyway. Every downloader was asked to reassemble two files for
+# no reason, and Raspberry Pi Imager cannot read a split file at all, so the
+# one-click flash the instructions describe was not actually available.
+#
+# 2 GiB less 16 MiB of headroom. Splitting still happens when it genuinely
+# must; it no longer happens when it must not.
 PART_SIZE="${SHACKWRIGHT_PART_SIZE:-1900M}"
-PART_LIMIT_BYTES="${SHACKWRIGHT_PART_LIMIT_BYTES:-$((1900 * 1024 * 1024))}"
+PART_LIMIT_BYTES="${SHACKWRIGHT_PART_LIMIT_BYTES:-$(( (2 * 1024 - 16) * 1024 * 1024 ))}"
 
 usage() {
     cat >&2 <<USAGE
