@@ -1,8 +1,8 @@
 ---
 name: CI
 
-# HamPi builds a full Raspberry Pi image from source, which takes hours on real
-# hardware and cannot run on a GitHub runner. CI therefore verifies everything
+# Shackwright compiles most of a ham radio station from source, which takes
+# hours on real hardware and cannot run on a GitHub runner. CI therefore verifies everything
 # that can be checked without a Pi: that the YAML parses, that the playbook
 # graph resolves, that the linters are satisfied, and that platform detection
 # still selects the right branch for each supported board and OS release.
