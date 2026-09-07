@@ -78,7 +78,7 @@
     lineinfile:
       path: /usr/share/applications/rbnc.desktop
       regexp: '^Icon=rbnc'
-      line: Icon=/usr/local/share/icons/hicolor/64x64/apps/rbnc.png 
+      line: Icon=/usr/local/share/icons/hicolor/64x64/apps/rbnc.png
 
   - name: Remove RBNC
     file:

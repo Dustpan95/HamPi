@@ -1,0 +1,53 @@
+---
+# yamllint configuration for HamPi.
+#
+# The intent is to catch YAML that will misbehave at runtime, not to enforce a
+# house style on 135 task files written over six years. Cosmetic rules are
+# relaxed; rules that catch real defects are errors.
+#
+# Notably `key-duplicates` stays on: a repeated key in a task silently discards
+# the earlier value, which in this codebase means a silently skipped package.
+
+extends: default
+
+ignore: |
+  .git/
+  files/
+  templates/
+
+rules:
+  # Ansible has always accepted yes/no, and the tree uses it several hundred
+  # times. Rewriting that is churn with no runtime effect.
+  truthy:
+    allowed-values: ['true', 'false', 'yes', 'no']
+    check-keys: false
+
+  # Task names and URLs in this tree are legitimately long.
+  line-length:
+    max: 200
+    level: warning
+
+  # Playbooks in tasks/ are imported, not all standalone documents.
+  document-start: disable
+
+  # Legacy comment alignment; no runtime effect.
+  comments-indentation: disable
+  comments:
+    min-spaces-from-content: 1
+
+  indentation:
+    spaces: consistent
+    indent-sequences: consistent
+    level: warning
+
+  braces:
+    max-spaces-inside: 1
+
+  octal-values:
+    forbid-implicit-octal: true
+    forbid-explicit-octal: true
+
+  # Real defects, kept as errors.
+  key-duplicates: enable
+  trailing-spaces: enable
+  new-line-at-end-of-file: enable

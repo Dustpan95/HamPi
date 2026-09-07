@@ -32,7 +32,7 @@
       - libcurl4-openssl-dev
       - libsndfile1-dev
       - libasound-dev
-      - xterm 
+      - xterm
       - ncat
       - texlive
       - xpdf
@@ -56,7 +56,7 @@
     copy:
       src: "{{ playbook_dir }}/../files/freepascal_install.exp"
       dest: /home/{{ ham_user }}/hamradio/fpc-3.2.2.arm-linux/freepascal_install.exp
-      mode: 0655
+      mode: "0655"
     when: is_rpi|bool
 
   - name: Install Free Pascal using Expect Script

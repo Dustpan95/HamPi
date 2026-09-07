@@ -51,7 +51,7 @@
       dest: /usr/share/applications/hamrs.desktop
       owner: root
       group: root
-      mode: 0644
+      mode: "0644"
 
   - name: Add HAMRS icon
     become: yes

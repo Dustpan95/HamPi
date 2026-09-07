@@ -13,7 +13,7 @@
       dest: /etc/sudoers.d/010_{{ ham_user }}-nopasswd
       group: root
       owner: root
-      mode: 0440
+      mode: "0440"
 
   - name: Enable passwordless sudo for HamPi / HamPC
     become: yes

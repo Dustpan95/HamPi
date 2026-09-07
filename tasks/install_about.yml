@@ -22,7 +22,7 @@
     file:
       path: /usr/share/icons/hampi/{{ item }}
       state: directory
-      mode: 0755
+      mode: "0755"
     with_items:
       - 256x256
       - 128x128
@@ -35,14 +35,14 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/share/icons/hampi.png"
       dest: "/usr/share/icons/hampi.png"
-      mode: 0644
+      mode: "0644"
 
   - name: Create HamPi icon in /usr/share/icons/hampi/[RESOLUTION]
     become: yes
     copy:
       src: "{{ playbook_dir }}/../files/usr/share/icons/hampi/hampi.png"
       dest: "/usr/share/icons/hampi/{{ item }}/hampi.png"
-      mode: 0644
+      mode: "0644"
     with_items:
       - 256x256
       - 128x128
@@ -55,7 +55,7 @@
     file:
       path: /usr/share/pixmaps/hampi/{{ item }}
       state: directory
-      mode: 0755
+      mode: "0755"
     with_items:
       - 256x256
       - 128x128
@@ -68,14 +68,14 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/share/pixmaps/hampi.png"
       dest: "/usr/share/pixmaps/hampi.png"
-      mode: 0644
+      mode: "0644"
 
   - name: Create HamPi icon in /usr/share/pixmaps/hampi/[RESOLUTION]
     become: yes
     copy:
       src: "{{ playbook_dir }}/../files/usr/share/pixmaps/hampi/hampi.png"
       dest: "/usr/share/pixmaps/hampi/{{ item }}/hampi.png"
-      mode: 0644
+      mode: "0644"
     with_items:
       - 256x256
       - 128x128
@@ -88,7 +88,7 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/share/applications/HamPi.desktop"
       dest: "/usr/share/applications/HamPi.desktop"
-      mode: 0644
+      mode: "0644"
     when: is_rpi|bool
 
   - name: Create HamPi script in /usr/bin
@@ -96,7 +96,7 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/bin/about_hampi"
       dest: "/usr/bin/about_hampi"
-      mode: 0755
+      mode: "0755"
     when: is_rpi|bool
 
   - name: Create HamPC desktop file in /usr/share/applications
@@ -104,7 +104,7 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/share/applications/HamPC.desktop"
       dest: "/usr/share/applications/HamPC.desktop"
-      mode: 0644
+      mode: "0644"
     when: is_pc|bool
 
   - name: Create HamPC script in /usr/bin
@@ -112,7 +112,7 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/bin/about_hampc"
       dest: "/usr/bin/about_hampc"
-      mode: 0755
+      mode: "0755"
     when: is_pc|bool
 
   - name: Create HamIQ desktop file in /usr/share/applications
@@ -120,7 +120,7 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/share/applications/HamIQ.desktop"
       dest: "/usr/share/applications/HamIQ.desktop"
-      mode: 0644
+      mode: "0644"
     when: is_iq|bool
 
   - name: Create HamIQ script in /usr/bin
@@ -128,6 +128,5 @@
     copy:
       src: "{{ playbook_dir }}/../files/usr/bin/about_hamiq"
       dest: "/usr/bin/about_hamiq"
-      mode: 0755
+      mode: "0755"
     when: is_iq|bool
-

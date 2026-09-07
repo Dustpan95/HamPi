@@ -10,7 +10,7 @@
   - name: Download and Unarchive RadioExplorer
     become: yes
     unarchive:
-      src:  http://www.radioexplorer.com.ru/RadioExplorer-2_7_7.zip
+      src: http://www.radioexplorer.com.ru/RadioExplorer-2_7_7.zip
       dest: /usr/
       remote_src: yes
     retries: 5

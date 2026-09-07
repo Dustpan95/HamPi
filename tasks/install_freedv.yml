@@ -159,7 +159,7 @@
     command: make install
     args:
       chdir: /home/{{ ham_user }}/hamradio/LPCNet/build
-      
+
   - name: Git clone latest Codec2 sources
     git:
       repo: https://github.com/drowe67/codec2.git

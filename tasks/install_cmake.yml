@@ -17,7 +17,7 @@
     package:
       name: cmake
       state: absent
-  
+
   - name: Create directory hamradio
     file:
       path: /home/{{ ham_user }}/hamradio

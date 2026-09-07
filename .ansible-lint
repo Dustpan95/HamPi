@@ -1,0 +1,51 @@
+---
+# ansible-lint configuration for HamPi.
+#
+# Directory layout note: this tree predates current Ansible conventions.
+# Every file under tasks/ is a full playbook with its own `hosts:` key, not a
+# task list, and library/ holds playbooks rather than custom modules. Without
+# the `kinds` mapping below, ansible-lint applies the task-file schema to all
+# of them and reports ~200 spurious schema and parser errors.
+#
+# Renaming those directories would be a large, disruptive change that breaks
+# every existing bookmark, wiki page and muscle-memory command, so the layout
+# stays and the linter is told what the files actually are.
+
+profile: min
+
+# Order matters: the first matching pattern wins. These four files are task
+# lists included by other playbooks, not playbooks themselves, so they must be
+# claimed before the tasks/*.yml playbook glob below.
+kinds:
+  - tasks: "tasks/build_HamClock_by_WB0OEW.yml"
+  - tasks: "tasks/install_librtlsdr.yml"
+  - tasks: "library/install_buster_repo.yml"
+  - playbook: "tasks/*.yml"
+  - playbook: "library/*.yml"
+  - playbook: "tests/*.yml"
+  - vars: "default/*.yml"
+
+exclude_paths:
+  - .git/
+  - files/
+  - templates/
+  - .github/
+
+skip_list:
+  # Formatting only, and already governed by .yamllint.
+  - yaml[indentation]
+  - yaml[comments]
+  - yaml[line-length]
+  # The tree calls modules by their short names in ~1400 places. Converting
+  # wholesale would bury functional changes in mechanical churn; new and
+  # modified code uses the fully qualified names.
+  - fqcn[action-core]
+  - fqcn[action]
+  # Task naming style, cosmetic.
+  - name[template]
+  - name[casing]
+  # This project's whole purpose is compiling software from source, so a great
+  # many command/shell invocations are legitimately not idempotent.
+  - no-changed-when
+  - command-instead-of-shell
+  - no-relative-paths

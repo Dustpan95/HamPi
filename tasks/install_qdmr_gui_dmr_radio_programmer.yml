@@ -108,7 +108,7 @@
     lineinfile:
       path: /usr/share/applications/qdmr.desktop
       regexp: '^Icon=qdmr'
-      line: Icon=/usr/share/icons/hicolor/64x64/qdmr.png 
+      line: Icon=/usr/share/icons/hicolor/64x64/qdmr.png
 
   - name: Remove QDMR
     file:

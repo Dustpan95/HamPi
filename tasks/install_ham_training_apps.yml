@@ -33,4 +33,3 @@
       path: /usr/share/applications/hamexam.desktop
       regexp: '^Categories=.*'
       line: Categories=HamRadio Training
-

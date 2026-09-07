@@ -1,0 +1,97 @@
+---
+name: CI
+
+# HamPi builds a full Raspberry Pi image from source, which takes hours on real
+# hardware and cannot run on a GitHub runner. CI therefore verifies everything
+# that can be checked without a Pi: that the YAML parses, that the playbook
+# graph resolves, that the linters are satisfied, and that platform detection
+# still selects the right branch for each supported board and OS release.
+
+on:
+  push:
+    branches: [master, BetaTesting, Testing]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install tooling
+        run: python3 -m pip install -r requirements.txt
+
+      - name: yamllint
+        # Not --strict: the tree carries ~130 cosmetic warnings (list
+        # indentation, comment spacing) inherited from six years of hand
+        # editing. They are surfaced in the log but do not fail the build.
+        # Anything yamllint rates an error, including duplicate keys, does.
+        run: yamllint .
+
+      - name: ansible-lint
+        run: ansible-lint
+
+  syntax:
+    name: Playbook syntax
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install tooling
+        run: python3 -m pip install -r requirements.txt
+
+      - name: Resolve and syntax-check the full playbook graph
+        run: ansible-playbook -i 'localhost,' --syntax-check tasks/main.yml
+
+      - name: Syntax-check every playbook individually
+        # main.yml only imports about two thirds of tasks/. The rest are
+        # disabled imports awaiting repair; they still have to parse so that
+        # re-enabling one is a one-line change rather than a debugging session.
+        run: |
+          rc=0
+          for playbook in tasks/*.yml library/*.yml; do
+            case "$playbook" in
+              tasks/main.yml) continue ;;
+              tasks/build_HamClock_by_WB0OEW.yml) continue ;;
+              tasks/install_librtlsdr.yml) continue ;;
+              library/install_buster_repo.yml) continue ;;
+            esac
+            if ! out=$(ansible-playbook -i 'localhost,' --syntax-check "$playbook" 2>&1); then
+              echo "::error file=${playbook}::syntax check failed"
+              echo "$out"
+              rc=1
+            fi
+          done
+          exit $rc
+
+  test:
+    name: Platform detection
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install tooling
+        run: python3 -m pip install -r requirements.txt
+
+      - name: Run platform detection tests
+        run: ./tests/run_tests.sh

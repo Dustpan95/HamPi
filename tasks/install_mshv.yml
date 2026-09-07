@@ -54,7 +54,7 @@
       dest: /usr/MSHV
       owner: root
       group: root
-      mode: 0755
+      mode: "0755"
       remote_src: yes
     with_items:
       - AllTxtMonthly
@@ -72,14 +72,14 @@
       dest: /usr/share/applications/MSHV.desktop
       owner: root
       group: root
-      mode: 0644
+      mode: "0644"
 
   - name: Install MSHV icon
     become: yes
     copy:
       src: /home/{{ ham_user }}/hamradio/MSHV_273/src/pic/ms_ico.png
       dest: /usr/share/pixmaps/MSHV.png
-      mode: 0644
+      mode: "0644"
       remote_src: yes
 
   - name: Remove MSHV build directory

@@ -63,7 +63,7 @@
       dest: "/usr/share/applications/noaa-apt.desktop"
       owner: root
       group: root
-      mode: 0644
+      mode: "0644"
 
   - name: Remove RUST installer
     file: dest=/tmp/initrust.sh state=absent

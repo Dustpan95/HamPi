@@ -22,7 +22,7 @@
         dest: "/usr/share/applications/hamclock-{{ item }}.desktop"
         owner: root
         group: root
-        mode: 0644
+        mode: "0644"
 
     - name: Clean HamClock-{{ item }} by WB0OEW
       command: make clean
