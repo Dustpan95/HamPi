@@ -1,5 +1,5 @@
 # HamPi, formerly known as W3DJS Raspberry Pi for Ham Radio
-HamPi, formerly known as W3DJS Raspberry Pi for Ham Radio
+Builds a complete amateur radio station, with a lean toward digital modes, on a Raspberry Pi, Linux PC or Inovato Quadra. Continues HamPi by W3DJS.
 
 # Documentation
 There is a comprehensive Wiki for HamPi, located here: [https://github.com/dslotter/HamPi/wiki](../../wiki)
