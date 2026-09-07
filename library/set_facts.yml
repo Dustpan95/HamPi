@@ -1,10 +1,10 @@
 #
 # Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
-# Copyright 2024 - 2026, HamPi contributors.
+# Copyright 2024 - 2026, Shackwright contributors.
 #
 # Licensed under the GNU General Public License v3.0. See LICENSE.
 #
-# Platform detection for HamPi / HamPC / HamIQ.
+# Platform detection for Shackwright.
 #
 # Design notes for maintainers:
 #
@@ -33,7 +33,7 @@
 
 ---
 
-- name: Set HamPi / HamPC / HamIQ facts
+- name: Set Shackwright platform facts
   hosts: all
   gather_facts: true
   tasks:
@@ -231,13 +231,13 @@
         that:
           - (is_debian | bool) or (is_ubuntu | bool)
         fail_msg: >-
-          HamPi supports Debian, Raspberry Pi OS and Ubuntu.
+          Shackwright supports Debian, Raspberry Pi OS and Ubuntu.
           Detected {{ ansible_distribution }}.
 
     - name: Warn when running an end-of-life operating system
       ansible.builtin.debug:
         msg: >-
           WARNING: {{ ansible_distribution_release }} is end-of-life and no
-          longer receives security updates. HamPi targets Debian 13 (Trixie).
+          longer receives security updates. Shackwright targets Debian 13 (Trixie).
           Builds on this release are unsupported and are expected to fail.
       when: is_buster | bool or is_bullseye | bool or is_impish | bool

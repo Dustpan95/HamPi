@@ -1,5 +1,5 @@
 #
-# Copyright 2024 - 2026, HamPi contributors.
+# Copyright 2024 - 2026, Shackwright contributors.
 # Licensed under the GNU General Public License v3.0. See LICENSE.
 #
 # Assertion pass for library/set_facts.yml. Run via tests/run_tests.sh, which

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 #
-# Copyright 2024 - 2026, HamPi contributors.
+# Copyright 2024 - 2026, Shackwright contributors.
 # Licensed under the GNU General Public License v3.0. See LICENSE.
 #
 """List every Debian package the playbooks install, so they can be checked

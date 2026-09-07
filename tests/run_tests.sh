@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# Copyright 2024 - 2026, HamPi contributors.
+# Copyright 2024 - 2026, Shackwright contributors.
 # Licensed under the GNU General Public License v3.0. See LICENSE.
 #
 # Exercises library/set_facts.yml against recorded /proc/device-tree/model
@@ -46,7 +46,7 @@ run_case() {
   fi
 }
 
-echo "HamPi platform detection tests"
+echo "Shackwright platform detection tests"
 echo
 
 run_case "Raspberry Pi 5"       "$FIXTURES/model_pi5"        "Raspberry Pi 5 Model B Rev 1.0" true  true  false false

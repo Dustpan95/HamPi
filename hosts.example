@@ -1,11 +1,11 @@
 #
 # Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
-# Copyright 2024 - 2026, HamPi contributors.
+# Copyright 2024 - 2026, Shackwright contributors.
 #
 # Licensed under the GNU General Public License v3.0. See LICENSE.
 #
 # ---------------------------------------------------------------------------
-# HamPi inventory template
+# Shackwright inventory template
 # ---------------------------------------------------------------------------
 #
 # Copy this file to "hosts" and edit it to match your setup:
@@ -24,14 +24,14 @@
 # key-based access to a fresh Raspberry Pi OS install:
 #
 #     ssh-keygen -t ed25519                 # if you do not already have a key
-#     ssh-copy-id <user>@hampi.local
-#     ssh <user>@hampi.local                # confirm it works without a password
+#     ssh-copy-id <user>@shack.local
+#     ssh <user>@shack.local                # confirm it works without a password
 #
 # Then supply the sudo password at run time instead of storing it:
 #
 #     ansible-playbook -i hosts --ask-become-pass tasks/main.yml
 #
-# The supplied run_HamPi_playbook script passes --ask-become-pass for you.
+# The supplied run_shackwright script passes --ask-become-pass for you.
 #
 # If you must store credentials, encrypt them with Ansible Vault rather than
 # writing them here in the clear:
@@ -45,10 +45,10 @@
 #
 # Replace the example host below with your own. The name on the left is what
 # Ansible connects to, so it must resolve: a hostname, an mDNS name such as
-# hampi.local, or an IP address.
+# shack.local, or an IP address.
 
-[hampi]
-# hampi.local
+[shack]
+# shack.local
 
 # A Raspberry Pi reached by address, with a login that differs from the
 # hostname's default:

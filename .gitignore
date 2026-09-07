@@ -64,7 +64,7 @@ files/usr/share/wallpapers/raspberry-pi-logo.png
 # host names and possibly credentials, so it is deliberately not tracked.
 hosts
 
-# Playbook run logs written by run_HamPi_playbook.
+# Playbook run logs written by run_shackwright.
 ansible-output/
 
 # Ansible retry files.

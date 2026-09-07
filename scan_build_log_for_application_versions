@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
-# Copyright 2024 - 2026, HamPi contributors.
+# Copyright 2024 - 2026, Shackwright contributors.
 #
 # Licensed under the GNU General Public License v3.0. See LICENSE.
 #
@@ -11,7 +11,7 @@
 # Usage:
 #     ./scan_build_log_for_application_versions <logfile> [host]
 #
-# <logfile> is a log written by run_HamPi_playbook, under ansible-output/.
+# <logfile> is a log written by run_shackwright, under ansible-output/.
 # [host] is the inventory host name or address that appears in that log; its
 # lines are filtered out so the host itself is not mistaken for a version
 # number. It defaults to the HAMPI_SCAN_HOST environment variable if set.

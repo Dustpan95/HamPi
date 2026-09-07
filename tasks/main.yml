@@ -4,7 +4,7 @@
 
 ---
 
-- name: HamPi / HamPC / HamIQ Playbook
+- name: Shackwright Playbook
   hosts: all
   pre_tasks:
     # ansible-core 2.16 is the floor: anything older is out of upstream
@@ -14,7 +14,7 @@
     # The test is spelled `version` rather than `version_compare`. The latter
     # is a long-deprecated alias that still functions today, but `version` is
     # the supported name and does not rely on the alias surviving.
-    - name: Verify Ansible meets HamPi / HamPC / HamIQ version requirements
+    - name: Verify Ansible meets Shackwright version requirements
       ansible.builtin.assert:
         that:
           - ansible_version.full is version('2.16', '>=')

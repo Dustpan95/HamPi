@@ -1,5 +1,5 @@
 ---
-# yamllint configuration for HamPi.
+# yamllint configuration for Shackwright.
 #
 # The intent is to catch YAML that will misbehave at runtime, not to enforce a
 # house style on 135 task files written over six years. Cosmetic rules are

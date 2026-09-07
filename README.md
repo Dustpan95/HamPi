@@ -1,13 +1,18 @@
-# HamPi
+# Shackwright
 
-HamPi builds a complete amateur radio software environment on a Raspberry Pi,
-an x86_64 Linux PC (as **HamPC**), or an Inovato Quadra (as **HamIQ**). It is an
-Ansible playbook, not an image: it takes a stock operating system install and
-adds a hundred-odd ham radio applications, their dependencies, desktop menu
-entries and configuration.
+Shackwright builds a complete amateur radio station from a stock Linux install.
+It is an Ansible playbook, not a disk image: point it at a Raspberry Pi, an
+x86_64 Linux PC, or an Inovato Quadra, and it installs a hundred-odd ham radio
+applications with their dependencies, desktop menu entries and configuration —
+with a heavy lean toward the digital modes.
 
-Originally created by **Dave Slotter, W3DJS**. This repository continues the
-project, which had its last upstream release in April 2024.
+A *wright* is a maker: a shipwright builds ships, a millwright builds mills.
+Shackwright builds shacks. It is not the station; it is what puts the station
+together.
+
+Shackwright continues **HamPi**, created by **Dave Slotter, W3DJS**, whose last
+release was April 2024. The playbooks are overwhelmingly his work. See
+[Credits](#credits).
 
 ---
 
@@ -61,21 +66,21 @@ libraries can link against Trixie libraries that look compatible and are not.
 Run the playbook from a PC or a second Pi, against the machine you are building.
 
 ```bash
-git clone https://github.com/Dustpan95/HamPi.git
-cd HamPi
+git clone https://github.com/Dustpan95/Shackwright.git
+cd Shackwright
 
 # Control-node tooling. Debian and Ubuntu mark their system Python as
 # externally managed, so use a virtual environment.
-python3 -m venv ~/.venv/hampi
-~/.venv/hampi/bin/pip install -r requirements.txt
-. ~/.venv/hampi/bin/activate
+python3 -m venv ~/.venv/shackwright
+~/.venv/shackwright/bin/pip install -r requirements.txt
+. ~/.venv/shackwright/bin/activate
 
 # Set up key-based SSH to the target, then describe it to Ansible.
-ssh-copy-id <user>@hampi.local
+ssh-copy-id <user>@shack.local
 cp hosts.example hosts
 $EDITOR hosts
 
-./run_HamPi_playbook
+./run_shackwright
 ```
 
 `hosts` is git-ignored, so your inventory survives updates and your credentials
@@ -88,8 +93,8 @@ source. Output is logged to `ansible-output/`.
 Any extra arguments are passed straight through to `ansible-playbook`:
 
 ```bash
-./run_HamPi_playbook --limit hampi.local     # one host
-./run_HamPi_playbook --check                 # dry run
+./run_shackwright --limit shack.local     # one host
+./run_shackwright --check                 # dry run
 ```
 
 ---
@@ -125,6 +130,22 @@ resolve.
 **A branch that can never run.** `install_jtdx.yml` guards a dependency install
 with `is_rpi and is_bullseye and not is_arm`. A Raspberry Pi is always ARM, so
 that task has never executed.
+
+**The rename is not finished below the waterline.** Everything a person reads
+says Shackwright, and the built system's bug-report URL now points here rather
+than at W3DJS's tracker. Still carrying HamPi names, because each one changes
+what lands on the target and cannot be verified without a build:
+
+* The `is_hampi` / `is_hampc` / `is_hamiq` facts, and the conditionals in
+  roughly fifteen playbooks that branch on them.
+* `/etc/hampi-release` and friends, `about_hampi`, `HamPi.desktop`, the
+  wallpapers, and the `files/home/hampi/` skeleton.
+* `version_check.sh` polls SourceForge for new *HamPi* releases. Under this
+  name that check can never succeed; it needs repointing or removing once
+  there is a release channel.
+
+None of that is user-visible branding you can't live with for now, but it
+should land before a first tagged release.
 
 **Python packages install into the system interpreter.** Sixteen applications
 are installed with pip's `--break-system-packages` override, centralized in
@@ -197,14 +218,16 @@ before opening a pull request.
 
 ## Credits
 
-HamPi was created and maintained for six years by **Dave Slotter, W3DJS**, with
-contributions from many others — see [CONTRIBUTORS.md](CONTRIBUTORS.md). This
-repository carries that work forward; the architecture, the application
-selection and the overwhelming majority of the code are his and theirs.
+Shackwright is a continuation of **HamPi**, created and maintained for six
+years by **Dave Slotter, W3DJS**, with contributions from many others — see
+[CONTRIBUTORS.md](CONTRIBUTORS.md). The architecture, the application selection
+and the overwhelming majority of this code are his and theirs. The rename is
+not a claim on that work; it exists so this project's bugs and releases are not
+confused with his.
 
 ## License
 
 GNU General Public License v3.0. See [LICENSE](LICENSE).
 
 Copyright 2020 - 2024, Dave Slotter (W3DJS).
-Copyright 2024 - 2026, HamPi contributors.
+Copyright 2024 - 2026, Shackwright contributors.

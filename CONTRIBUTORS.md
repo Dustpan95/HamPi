@@ -1,4 +1,6 @@
 ##### These are the contributors to HamPi and HamPC, in chronological order:
+#####
+##### Shackwright is a continuation of their work.
 
 + Dave Slotter, W3DJS
 + Michelle Slotter
@@ -20,13 +22,14 @@
 ---
 
 HamPi was created and maintained by Dave Slotter, W3DJS, from 2020 through
-its last upstream release in April 2024. The architecture, the application
+its last release in April 2024. Shackwright continues it under a new name so
+that this project's bugs and releases are not confused with his. The architecture, the application
 selection and the overwhelming majority of this code are the work of him and
 the contributors listed above.
 
 ##### Maintenance
 
-+ W0BTE - bringing the project up to date from 2026
++ W0BTE - Shackwright, bringing the project up to date from 2026
 
 Maintenance is listed separately because it is a different job from the one
 above. The application selection, the build logic and the design of this
@@ -35,4 +38,4 @@ recorded here is keeping it running on current hardware and current
 Raspberry Pi OS.
 
 Additions and corrections to either list are welcome by pull request or
-issue: <https://github.com/Dustpan95/HamPi/issues>
+issue: <https://github.com/Dustpan95/Shackwright/issues>

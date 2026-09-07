@@ -43,7 +43,7 @@ Trixie (Debian 13). Not yet verified by an end-to-end build on hardware.
   building `--with-python-binding`.
 - qdmr pinned yaml-cpp by soname and could not resolve it on Trixie; it now
   installs `libyaml-cpp-dev`.
-- `run_HamPi_playbook` returned tee's exit status, reporting success for
+- The run script returned tee's exit status, reporting success for
   failed builds; it never created its log directory; and it invoked a
   `notify_via_email.py` that is in no one's checkout.
 - `scan_build_log_for_application_versions` hardcoded the original
@@ -51,6 +51,16 @@ Trixie (Debian 13). Not yet verified by an end-to-end build on hardware.
 - Quoted 22 implicit octal file modes.
 
 ### Changed
+- **The project is renamed to Shackwright.** It continues HamPi by Dave
+  Slotter, W3DJS, under a new name so its bugs, releases and issue tracker
+  are not confused with his. A *wright* is a maker: shipwright, millwright,
+  Shackwright. Nothing about the attribution changes; see CONTRIBUTORS.md.
+- `run_HamPi_playbook` is now `run_shackwright`, and
+  `run_HamPi_playbook_xubuntu_vm` is `run_shackwright_xubuntu_vm`. Their
+  `HAMPI_*` environment overrides are now `SHACKWRIGHT_*`.
+- CONTRIBUTING.md and the built system's BUG_REPORT_URL pointed at the
+  upstream issue tracker, so bug reports for this fork would have landed on
+  W3DJS's repository. Both now point here.
 - Python packages install via the `pip` module rather than `command`, so
   re-runs no longer reinstall everything. The PEP 668 override is now one
   documented variable instead of sixteen copies of a bare flag.

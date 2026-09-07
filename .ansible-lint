@@ -1,5 +1,5 @@
 ---
-# ansible-lint configuration for HamPi.
+# ansible-lint configuration for Shackwright.
 #
 # Directory layout note: this tree predates current Ansible conventions.
 # Every file under tasks/ is a full playbook with its own `hosts:` key, not a

@@ -1,30 +1,30 @@
 #!/usr/bin/env bash
 #
 # Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
-# Copyright 2024 - 2026, HamPi contributors.
+# Copyright 2024 - 2026, Shackwright contributors.
 #
 # Licensed under the GNU General Public License v3.0. See LICENSE.
 #
-# Runs the HamPi playbook against the hosts in ./hosts and writes a timestamped
-# log to ./ansible-output/.
+# Runs the Shackwright playbook against the hosts in ./hosts and writes a
+# timestamped log to ./ansible-output/.
 #
 # Usage:
-#     ./run_HamPi_playbook [additional ansible-playbook arguments]
+#     ./run_shackwright [additional ansible-playbook arguments]
 #
 # Any arguments are passed straight through, so you can limit a run to one
 # machine or one application:
 #
-#     ./run_HamPi_playbook --limit hampi.local
-#     ./run_HamPi_playbook --check
+#     ./run_shackwright --limit shack.local
+#     ./run_shackwright --check
 #
 
 set -o pipefail
 
 cd "$(dirname "$0")" || exit 1
 
-INVENTORY="${HAMPI_INVENTORY:-hosts}"
-PLAYBOOK="${HAMPI_PLAYBOOK:-tasks/main.yml}"
-OUTPUT_DIR="${HAMPI_OUTPUT_DIR:-ansible-output}"
+INVENTORY="${SHACKWRIGHT_INVENTORY:-hosts}"
+PLAYBOOK="${SHACKWRIGHT_PLAYBOOK:-tasks/main.yml}"
+OUTPUT_DIR="${SHACKWRIGHT_OUTPUT_DIR:-ansible-output}"
 
 if [ ! -f "$INVENTORY" ]; then
     cat >&2 <<MSG
@@ -44,9 +44,9 @@ error: ansible-playbook not found
 
 Install the control-node tooling first:
 
-    python3 -m venv ~/.venv/hampi
-    ~/.venv/hampi/bin/pip install -r requirements.txt
-    . ~/.venv/hampi/bin/activate
+    python3 -m venv ~/.venv/shackwright
+    ~/.venv/shackwright/bin/pip install -r requirements.txt
+    . ~/.venv/shackwright/bin/activate
 
 MSG
     exit 1

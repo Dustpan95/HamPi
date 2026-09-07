@@ -1,18 +1,18 @@
-name: HamPi and HamPC
+name: Shackwright
 description: >-
-  HamPi, HamPC and HamIQ are a ham radio software distribution
-  for the Raspberry Pi, x86_64 Linux PC, and Inovato Quadra
-version: 3.4.0
+  Shackwright builds a complete amateur radio station, with a lean
+  toward the digital modes, on a Raspberry Pi, an x86_64 Linux PC or
+  an Inovato Quadra. Continues HamPi by Dave Slotter, W3DJS.
+version: 4.0.0-dev
 type: sw.application
 assets:
   repository:
     type: blob.asset
     data:
-      url: 'https://github.com/Dustpan95/HamPi'
-  logo:
-    type: blob.asset
-    data:
-      url: 'https://raw.githubusercontent.com/Dustpan95/HamPi/master/HamPi_Logo.png'
+      url: 'https://github.com/Dustpan95/Shackwright'
+  # No logo yet. HamPi_Logo.png in this repository is W3DJS's artwork for
+  # HamPi; reusing it as Shackwright's mark would recreate exactly the
+  # confusion this rename exists to prevent. A replacement is needed.
 data:
   defaultDeviceType: raspberrypi4
   supportedDeviceTypes:
