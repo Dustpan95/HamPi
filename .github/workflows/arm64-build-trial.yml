@@ -25,7 +25,7 @@ on:
       playbooks:
         description: 'Comma-separated playbooks under tasks/ to run'
         required: true
-        default: 'install_hamlib,install_qdmr_gui_dmr_radio_programmer,install_chirp,install_quisk,install_voacapl,install_logging_apps'
+        default: 'install_soapy_sdr,install_soapy_rtlsdr,install_soapy_hackrf,install_soapy_airspy,install_soapy_airspyhf,install_soapy_plutosdr'
       timeout_minutes:
         description: 'Give up after this many minutes (max 350)'
         required: false
@@ -82,7 +82,7 @@ jobs:
         id: build
         continue-on-error: true
         env:
-          PLAYBOOKS: ${{ inputs.playbooks || 'install_hamlib,install_qdmr_gui_dmr_radio_programmer,install_chirp,install_quisk,install_voacapl,install_logging_apps' }}
+          PLAYBOOKS: ${{ inputs.playbooks || 'install_soapy_sdr,install_soapy_rtlsdr,install_soapy_hackrf,install_soapy_airspy,install_soapy_airspyhf,install_soapy_plutosdr' }}
         run: |
           mkdir -p ansible-output
           rc=0
@@ -142,6 +142,24 @@ jobs:
               echo "| \`${name}\` | ${verdict} | ${ok:-?} | ${changed:-?} | ${failed:-?} | ${dur}s |"
             done
             echo
+            # The table says which playbook failed; this says why. Without it
+            # the reason sits thousands of lines up the log, unreachable
+            # except by downloading the artifact.
+            for log in ansible-output/*.log; do
+              [ -f "$log" ] || continue
+              grep -q 'fatal:' "$log" || continue
+              name=$(basename "$log" .log)
+              echo "### ${name}"
+              echo
+              # The last TASK banner before the first fatal is the task that died.
+              task=$(awk '/fatal:/{exit} /^TASK \[/{t=$0} END{print t}' "$log")
+              echo "Failing task: \`${task:-unknown}\`"
+              echo
+              echo '```'
+              grep -m1 'fatal:' "$log" | cut -c1-1200
+              echo '```'
+              echo
+            done
             echo "Disk remaining: $(df -h / | tail -1 | awk '{print $4}')"
             echo
             echo "_Ubuntu on a hosted runner, not Raspberry Pi OS on a Pi. This shows"
