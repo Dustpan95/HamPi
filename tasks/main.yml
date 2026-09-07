@@ -46,27 +46,36 @@
 ### DJS: Node.js install broken under Bookworm - import_playbook: include_DRAWS_support.yml
 - import_playbook: install_airspy.yml
 - import_playbook: install_airspyhf.yml
-- import_playbook: install_soapy_sdr.yml
-- import_playbook: install_soapy_audio.yml
+#
+# SoapySDR and its device drivers now come from the distribution. Debian
+# packages the core library, the tools, the Python bindings and thirteen
+# driver modules for arm64 and armhf, so twelve source-build playbooks --
+# disabled since Bookworm as "build broken" -- are replaced by one apt
+# install that takes seconds rather than well over an hour.
+#
+# Those twelve were not, in fact, failing to build. Each pulled in
+# gr-osmosdr, which reaches xtrx-dkms, which compiles a kernel module at
+# install time; where that cannot succeed the task retried five times and
+# the play died minutes later without compiling anything. See
+# tasks/install_soapy.yml.
+#
+# This adds LimeSDR, Mirics and RFspace support, which was never here
+# before, and restores Airspy, bladeRF, HackRF, OsmoSDR, Red Pitaya,
+# RTL-SDR and USRP.
+#
+- import_playbook: install_soapy.yml
+
+# Still built from source, because Debian does not package them.
 - import_playbook: install_soapy_multi.yml
 - import_playbook: install_soapy_netsdr.yml
-- import_playbook: install_soapy_remote.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_airspy.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_airspyhf.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_bladeRF.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_fcdpp.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_hackrf.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_osmo.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_plutosdr.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_redpitaya.yml
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_rtlsdr.yml
-# Fails to build under aarch64:
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_sdrplay3.yml
-# Fails to build under aarch64:
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_volkconverters.yml
-# ^^^ This part takes about 1 hour, 15 minutes to build on a RPi 4 ^^^
-### DJS: Build broken under Bookworm - import_playbook: install_soapy_uhd.yml
-# ^^^ UHD / SoapyUHD takes about 45 minutes to build on a RPi 4 ^^^
+
+# Unpackaged and still disabled, each for its own reason rather than the
+# shared one above. They need individual investigation:
+#   install_soapy_airspyhf.yml      AirspyHF
+#   install_soapy_fcdpp.yml         FunCube Dongle Pro+
+#   install_soapy_plutosdr.yml      ADALM-Pluto
+#   install_soapy_volkconverters.yml  VOLK type converters
+#   install_soapy_sdrplay3.yml      SDRplay; proprietary API, not packageable
 
 #
 # FLDigi Suite

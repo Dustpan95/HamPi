@@ -155,12 +155,31 @@ Any extra arguments are passed straight through to `ansible-playbook`:
 These are recorded rather than fixed because confirming them needs a real
 build. Help with any of them is welcome.
 
-**34 applications are disabled.** `tasks/main.yml` has 34 commented-out imports,
-most marked "broken under Bookworm" by upstream — including SDRAngel, GQRX,
-CubicSDR, FreeDV, dump1090, TQSL, most of the SoapySDR driver modules, and the
-DRAWS hat support. Each needs to be tried against Trixie and either repaired or
-retired. They all still pass a syntax check, so re-enabling one is a one-line
-change.
+**22 applications are disabled.** `tasks/main.yml` has 22 commented-out
+imports, most marked "broken under Bookworm" by upstream — including SDRAngel,
+GQRX, CubicSDR, FreeDV, dump1090, TQSL, and the DRAWS hat support. Each needs
+to be tried against Trixie and either repaired or retired. They all still pass
+a syntax check, so re-enabling one is a one-line change.
+
+Two of them cannot be repaired at all: `install_twclock` and
+`install_twhamqth` fetch from a website that no longer exists. They need a new
+upstream source or retirement.
+
+**SDR support is restored.** This was 12 of the 34. Every SoapySDR driver
+module was disabled as "build broken under Bookworm", and an arm64 trial found
+that diagnosis was wrong: each pulled in `gr-osmosdr`, which reaches
+`xtrx-dkms`, which compiles a kernel module at install time. Where that fails,
+apt fails, the task retries five times at thirty-second intervals, and the play
+dies minutes later having compiled nothing. `gr-osmosdr` is a GNU Radio block a
+SoapySDR device driver never needed.
+
+They are now installed from Debian, which packages the core library, tools,
+Python bindings and thirteen driver modules for arm64 and armhf. That restores
+Airspy, bladeRF, HackRF, OsmoSDR, Red Pitaya, RTL-SDR and USRP, adds LimeSDR,
+Mirics and RFspace which were never here before, and replaces well over an hour
+of compiling with an apt install. Five devices remain unpackaged and still need
+source builds: AirspyHF, FunCube Dongle Pro+, PlutoSDR, VOLK converters, and
+SDRplay, whose API is proprietary.
 
 **Eleven enabled playbooks install dependencies only for old releases.** They
 branch on Buster, Bullseye or Jammy and match nothing on Trixie, so the task

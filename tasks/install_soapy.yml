@@ -1,0 +1,89 @@
+#
+# Copyright 2020 - 2024, Dave Slotter (W3DJS). All rights reserved.
+# Copyright 2024 - 2026, Shackwright contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Installs SoapySDR and its device drivers from the distribution.
+#
+# This replaces a dozen playbooks that each cloned a vendor library and a
+# Soapy module and compiled them. That approach predates Debian packaging
+# them; Trixie now ships the core library, the tools, the Python bindings and
+# thirteen driver modules, built for arm64 and armhf. Installing them takes
+# seconds instead of the better part of an hour, and they are maintained,
+# security-updated and ABI-consistent with each other.
+#
+# Twelve of those source-build playbooks had been disabled since Bookworm as
+# "build broken". An arm64 trial found the actual cause, which was not the
+# build at all: each pulled in gr-osmosdr, which depends on libxtrxll0t64,
+# which depends on xtrx-dkms. DKMS compiles a kernel module against the
+# running kernel at install time, and where that cannot succeed apt fails,
+# the task retries five times at thirty second intervals, and the play dies
+# two to four minutes later. gr-osmosdr is a GNU Radio block; a SoapySDR
+# device driver never needed it.
+#
+# soapysdr-module-xtrx is deliberately not installed here, for the same
+# reason: it drags in that DKMS chain. XTRX owners can add it by hand.
+#
+# Not packaged, and still built from source by their own playbooks:
+# AirspyHF, FunCube Dongle Pro+, PlutoSDR, VOLK converters, and SDRplay,
+# whose API is proprietary.
+#
+
+---
+
+- name: Install SoapySDR and device drivers
+  hosts: all
+  tasks:
+
+    - name: Install SoapySDR core, tools and Python bindings
+      become: true
+      ansible.builtin.package:
+        name:
+          - libsoapysdr-dev
+          - soapysdr-tools
+          - python3-soapysdr
+        state: present
+      retries: 5
+      delay: 30
+      register: soapy_core
+      until: soapy_core is not failed
+
+    - name: Install SoapySDR device driver modules
+      become: true
+      # Listed one by one rather than using the soapysdr-module-all
+      # metapackage. The metapackage happens to cover the same set today, but
+      # naming each module keeps the supported hardware visible here and stops
+      # a future addition to it arriving unannounced -- soapysdr-module-xtrx,
+      # for one, reaches xtrx-dkms and the kernel build described above.
+      ansible.builtin.package:
+        name:
+          - soapysdr-module-airspy      # Airspy R2 / Mini
+          - soapysdr-module-audio       # sound card as an SDR
+          - soapysdr-module-bladerf     # Nuand bladeRF
+          - soapysdr-module-hackrf      # Great Scott Gadgets HackRF
+          - soapysdr-module-lms7        # LimeSDR
+          - soapysdr-module-mirisdr     # Mirics
+          - soapysdr-module-osmosdr     # OsmoSDR devices
+          - soapysdr-module-redpitaya   # Red Pitaya
+          - soapysdr-module-remote      # SoapyRemote client
+          - soapysdr-module-rfspace     # RFspace
+          - soapysdr-module-rtlsdr      # RTL-SDR dongles
+          - soapysdr-module-uhd         # Ettus USRP
+        state: present
+      retries: 5
+      delay: 30
+      register: soapy_modules
+      until: soapy_modules is not failed
+
+    - name: List the SoapySDR drivers that registered
+      # Records what is actually usable in the build log, so a missing driver
+      # is visible here rather than when someone plugs a radio in.
+      ansible.builtin.command: SoapySDRUtil --info
+      register: soapy_info
+      changed_when: false
+      failed_when: false
+
+    - name: Report the installed SoapySDR drivers
+      ansible.builtin.debug:
+        msg: "{{ soapy_info.stdout_lines | default(['SoapySDRUtil produced no output']) }}"
