@@ -1,0 +1,85 @@
+---
+- name: Read installed package state
+  ansible.builtin.package_facts:
+    manager: apt
+
+- name: Read DietPi's software state
+  ansible.builtin.slurp:
+    src: /boot/dietpi/.installed
+  register: station_dietpi_state
+  when: station_mode == 'desktop'
+
+- name: Determine whether Xfce needs installation or repair
+  ansible.builtin.set_fact:
+    station_install_xfce: >-
+      {{ station_mode == 'desktop' and
+         ('xfce4' not in ansible_facts['packages'] or
+          'aSOFTWARE_INSTALL_STATE[25]=2' not in
+          (station_dietpi_state.content | default('') | b64decode).splitlines()) }}
+
+- name: Explain the desktop change during a dry run
+  ansible.builtin.debug:
+    msg: DietPi-Software will install Xfce (software ID 25) during an actual installation.
+  when: ansible_check_mode and station_install_xfce
+
+- name: Install Xfce through DietPi's software manager
+  ansible.builtin.command:
+    argv: [/boot/dietpi/dietpi-software, install, '25']
+  environment:
+    G_INTERACTIVE: '0'
+    DEBIAN_FRONTEND: noninteractive
+  changed_when: true
+  when: station_install_xfce and not ansible_check_mode
+
+- name: Install selected radio and diagnostic packages
+  ansible.builtin.apt:
+    name: "{{ station_package_specs }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+    install_recommends: false
+    allow_downgrade: false
+    fail_on_autoremove: true
+    policy_rc_d: 101
+
+- name: Grant the existing station user audio and serial device access
+  ansible.builtin.user:
+    name: "{{ station_user }}"
+    groups: [audio, dialout]
+    append: true
+
+- name: Record the complete installed package inventory
+  ansible.builtin.command:
+    argv: [dpkg-query, '-W', '-f=${db:Status-Status}\t${binary:Package}\t${Version}\t${Architecture}\n']
+  changed_when: false
+  register: station_installed_packages
+  when: not ansible_check_mode
+
+- name: Create the installation record directory
+  ansible.builtin.file:
+    path: /var/lib/hamradio-station
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Write exact installed package versions
+  ansible.builtin.copy:
+    content: "{{ station_installed_packages.stdout_lines | select('match', '^installed\t') | map('regex_replace', '^installed\t', '') | join('\n') }}\n"
+    dest: /var/lib/hamradio-station/packages.tsv
+    owner: root
+    group: root
+    mode: '0644'
+  when: not ansible_check_mode
+
+- name: Write the requested configuration and detected platform
+  ansible.builtin.copy:
+    content: >-
+      {{ {'schema_version': 1, 'mode': station_mode, 'profiles': station_profiles,
+          'requested_packages': station_package_specs, 'platform': station_platform,
+          'hardware_validation': 'pending'} | to_nice_json }}
+    dest: /var/lib/hamradio-station/installation.json
+    owner: root
+    group: root
+    mode: '0644'
+  when: not ansible_check_mode

@@ -16,6 +16,41 @@ release was April 2024. The playbooks are overwhelmingly his work. See
 
 ---
 
+## Two tracks
+
+Shackwright is being built along two lines at once. They target different
+operating systems and are at very different stages, so it matters which one you
+are looking at.
+
+### `tasks/` — the inherited playbooks
+
+The HamPi tree, repaired. This is what installs the full catalogue of a
+hundred-plus applications, and it is the only part that does so today. It
+targets **Raspberry Pi OS Trixie**, Debian 13 and Ubuntu, on Pi, x86_64 PC and
+the Inovato Quadra. Everything in this README below this section describes it.
+
+Mature in coverage, freshly repaired for Trixie, and not yet verified by an
+end-to-end hardware build.
+
+### `dietpi/` — the DietPi installer
+
+A newer, deliberately smaller installer targeting **DietPi ARM64 on Raspberry Pi
+4 and Pi 5**, with selectable radio profiles, desktop operation, and planned
+remote desktop and flashable images. It has its own inventory, roles and tests
+under [`dietpi/`](dietpi/).
+
+An early foundation, not a validated image release, and it does not yet install
+the application catalogue that `tasks/` does. See
+[`dietpi/README.md`](dietpi/README.md) and
+[`dietpi/ROADMAP.md`](dietpi/ROADMAP.md).
+
+**Which should you use?** Today, `tasks/`, because it is the one that installs
+the applications. `dietpi/` is where new architecture is being worked out. The
+root playbooks are not the long-term installer, but they are the working one,
+so they are being kept correct rather than left to rot.
+
+---
+
 ## Status
 
 **Modernization in progress. Not yet verified on hardware.**
