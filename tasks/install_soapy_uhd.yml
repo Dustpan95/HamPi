@@ -13,7 +13,7 @@
 #    CFLAGS: "-O2 -march=armv7-a -mfloat-abi=hard -mfpu=neon -mtune=cortex-a53 -Wno-psabi"
 #    ASMFLAGS: "-O2 -march=armv7-a -mfloat-abi=hard -mfpu=neon -mtune=cortex-a53 -g"
     CMAKE_BUILD_PARALLEL_LEVEL: 4
-    MAKEFLAGS: -j {{ ansible_processor_vcpus }}
+    MAKEFLAGS: -j {{ shackwright_make_jobs }}
   tasks:
 
   - name: Create directory hamradio

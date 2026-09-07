@@ -7,6 +7,40 @@
   gather_facts: no
   tasks:
 
+  - name: Check for a recorded original swap configuration
+    ansible.builtin.stat:
+      path: /var/lib/shackwright/dphys-swapfile.original
+    register: swap_original
+
+  - name: Restore the original swap configuration
+    # The build enlarges swap; leaving a multi-gigabyte swapfile behind would
+    # waste that space on every card flashed from the resulting image.
+    when: swap_original.stat.exists
+    block:
+
+      - name: Put back the original dphys-swapfile settings
+        become: yes
+        ansible.builtin.copy:
+          remote_src: yes
+          src: /var/lib/shackwright/dphys-swapfile.original
+          dest: /etc/dphys-swapfile
+          mode: "0644"
+
+      - name: Apply the restored swap size
+        become: yes
+        ansible.builtin.shell: |
+          set -e
+          dphys-swapfile swapoff
+          dphys-swapfile setup
+          dphys-swapfile swapon
+        changed_when: true
+
+      - name: Remove the recorded original
+        become: yes
+        ansible.builtin.file:
+          path: /var/lib/shackwright/dphys-swapfile.original
+          state: absent
+
   - name: Autoremove unneeded packages (Part Deux)
     become: yes
     apt:

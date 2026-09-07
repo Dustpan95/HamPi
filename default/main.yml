@@ -27,6 +27,28 @@
 # command line.
 pip_system_extra_args: "{{ '--break-system-packages' if (is_bookworm | bool or is_trixie | bool or is_forky | bool) else '' }}"
 
+#
+# Parallel compilation
+#
+# 79 playbooks compiled with -j <core count>, which is -j4 on every Raspberry
+# Pi regardless of how much memory it has. A heavy C++ link -- wxWidgets, Qt,
+# SDRAngel -- can hold 1-2 GB in a single compiler process, so four at once on
+# a 2 GB board invokes the OOM killer part way through a multi-hour build, and
+# Raspberry Pi OS ships only about 200 MB of swap to absorb it.
+#
+# Cap the job count by memory as well as cores: roughly one job per 1.5 GB,
+# never more than the core count, never fewer than one. A 2 GB Pi builds
+# serially and slowly, which is far better than failing at hour two.
+shackwright_make_jobs: "{{ [ansible_processor_vcpus | int, [1, (ansible_memtotal_mb | int // 1536)] | max] | min }}"
+
+# Enlarge swap for the build on boards with less memory than this. Anything at
+# or above it has enough headroom that the default swap is fine.
+swap_ram_threshold_mb: 8192
+
+# Swap size to use while building, in MB. Restored to the original after the
+# run by finish_tasks.yml, so this does not persist into a released image.
+build_swap_size_mb: 4096
+
 # BlueDV version is current as of 2020-05-06
 bluedv_version: 09352
 gridtracker_md5sum_armf: ae526dc9855cc536f5ee3fc8f871ebf7

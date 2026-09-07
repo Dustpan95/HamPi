@@ -9,7 +9,7 @@
     # These only work for ARM32, not ARM64:
     CXXFLAGS: -O2 -march=native -mtune=native
     CFLAGS: -O2 -march=native -mtune=native
-    MAKEFLAGS: -j {{ ansible_processor_vcpus }}
+    MAKEFLAGS: -j {{ shackwright_make_jobs }}
   tasks:
 
   - name: Create directory hamradio

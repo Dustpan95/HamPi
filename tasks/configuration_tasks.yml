@@ -288,13 +288,20 @@
       create: yes
       block: |
         # BUILD OPTIONS
-        export MAKEFLAGS="-j `grep processor /proc/cpuinfo | wc -l`"
+        # Parallel build jobs, capped by memory as well as core count. A heavy
+        # C++ link can hold 1-2 GB in one compiler process, so -j4 on a small
+        # board invokes the OOM killer. Roughly one job per 1.5 GB.
+        _jobs=$(awk '/MemTotal/{print int($2/1572864)}' /proc/meminfo)
+        [ "${_jobs:-0}" -lt 1 ] && _jobs=1
+        [ "$_jobs" -gt "$(nproc)" ] && _jobs=$(nproc)
+        export MAKEFLAGS="-j${_jobs}"
+        unset _jobs
         export CXXFLAGS='-O2 -march=native -mtune=native'
         export CFLAGS='-O2 -march=native -mtune=native'
         LIBRARY_PATH='/usr/local/lib'
         INCLUDE_PATH='/usr/local/include'
         # For using XTRX and SoapySDR with SDRAngel:
-        export LD_LIBRARY_PATH=/usr/local/lib:/opt/install/xtrx-images/lib:$LD_LIBARY_PATH
+        export LD_LIBRARY_PATH=/usr/local/lib:/opt/install/xtrx-images/lib:$LD_LIBRARY_PATH
 
         # TO PERMIT LAUNCHING X-WINDOWS APPS FROM TERMINAL
         export DISPLAY=:0

@@ -24,6 +24,8 @@
 
 - import_playbook: ../library/set_facts.yml
 - import_playbook: init_task.yml
+# Enlarge swap before anything expensive is compiled.
+- import_playbook: configure_build_swap.yml
 - import_playbook: configuration_tasks.yml
 - import_playbook: install_menus.yml
 - import_playbook: install_about.yml

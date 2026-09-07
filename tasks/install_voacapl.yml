@@ -10,7 +10,7 @@
     CFLAGS: -O2 -march=native -mtune=native
     # To avoid race condition in VOACAPL pipeline build in v0.7.5
     MAKEFLAGS: -j 1
-#    MAKEFLAGS: -j {{ ansible_processor_vcpus }}
+#    MAKEFLAGS: -j {{ shackwright_make_jobs }}
   tasks:
 
   - name: Create directory hamradio

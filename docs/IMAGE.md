@@ -16,9 +16,25 @@ that exists covers packaging and publishing, not the build itself. See
 Start from a clean, current Raspberry Pi OS so the image is reproducible and
 carries no leftovers from a previous attempt.
 
-1. Flash **Raspberry Pi OS Trixie, 64-bit**, to a card at least 32 GB. Use a
-   Pi 5 or Pi 4; a Pi 5 is much faster at compiling and this is a compile-bound
-   job.
+1. Flash **Raspberry Pi OS Trixie, 64-bit**, to a card at least 32 GB.
+
+   The board generation matters less than memory. Raspberry Pi OS 64-bit is a
+   single image across Pi 3/4/400/5/500/Zero 2 W, so an image built on a Pi 4
+   boots a Pi 5 and vice versa — build on whatever you have.
+
+   | Board | Suitability |
+   |-------|-------------|
+   | Pi 5 / 500 | Best; roughly 2–3× a Pi 4 at compiling |
+   | Pi 4 8 GB / Pi 400 | Fine, slower |
+   | Pi 4 4 GB | Fine |
+   | Pi 4 2 GB | Workable but slow; builds serially |
+   | Pi 3 (1 GB), Zero 2 W (512 MB) | Not recommended |
+
+   The playbook caps parallel compilation by memory and enlarges swap for the
+   duration of the build, so small boards no longer die to the OOM killer part
+   way through — they just take longer. 64-bit is not optional: Trixie no
+   longer ships a 32-bit Pi 4 kernel, and 32-bit ARM changed several library
+   ABIs without changing their names in the 64-bit `time_t` transition.
 2. Boot it, complete first-run setup, enable SSH.
 3. Update it fully: `sudo apt update && sudo apt full-upgrade`, then reboot.
 4. From another machine, set up key-based SSH and run the playbook:

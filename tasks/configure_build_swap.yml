@@ -1,0 +1,108 @@
+#
+# Copyright 2024 - 2026, Shackwright contributors.
+#
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Temporarily enlarges swap for the duration of the build.
+#
+# Raspberry Pi OS ships about 200 MB of swap. That is fine for ordinary use and
+# nowhere near enough to absorb a heavy C++ link, so on a small board a build
+# that has been running for two hours dies to the OOM killer with nothing to
+# show for it. Parallelism is already capped by memory (see
+# shackwright_make_jobs in default/main.yml); this is the second half of the
+# same fix, for the case where a single compiler process is the problem rather
+# than four of them.
+#
+# The original setting is recorded so finish_tasks.yml can put it back. Leaving
+# a multi-gigabyte swapfile behind would waste that space on every card flashed
+# from the resulting image.
+#
+
+---
+
+- name: Configure build swap
+  hosts: all
+  tasks:
+
+    - name: Check whether this system manages swap with dphys-swapfile
+      ansible.builtin.stat:
+        path: /etc/dphys-swapfile
+      register: dphys_conf
+
+    - name: Report the memory available for building
+      ansible.builtin.debug:
+        msg: >-
+          {{ ansible_memtotal_mb }} MB RAM, {{ ansible_processor_vcpus }} CPUs;
+          building with -j{{ shackwright_make_jobs }}.
+          {{ 'Swap will be enlarged for the build.'
+             if (ansible_memtotal_mb | int < swap_ram_threshold_mb | int
+                 and dphys_conf.stat.exists)
+             else 'Swap left as configured.' }}
+
+    - name: Enlarge swap for the build
+      when:
+        - dphys_conf.stat.exists
+        - ansible_memtotal_mb | int < swap_ram_threshold_mb | int
+      block:
+
+        - name: Read the current swap configuration
+          ansible.builtin.slurp:
+            src: /etc/dphys-swapfile
+          register: dphys_current
+
+        - name: Create the state directory
+          become: true
+          ansible.builtin.file:
+            path: /var/lib/shackwright
+            state: directory
+            mode: "0755"
+
+        - name: Record the original swap configuration
+          become: true
+          ansible.builtin.copy:
+            content: "{{ dphys_current.content | b64decode }}"
+            dest: /var/lib/shackwright/dphys-swapfile.original
+            mode: "0644"
+            # Never overwrite an existing record. On a second run this file
+            # already holds the true original, and clobbering it with the
+            # enlarged values would make the setting permanent.
+            force: false
+
+        - name: Set the build swap size
+          become: true
+          ansible.builtin.lineinfile:
+            path: /etc/dphys-swapfile
+            regexp: '^\s*#?\s*CONF_SWAPSIZE='
+            line: "CONF_SWAPSIZE={{ build_swap_size_mb }}"
+            state: present
+
+        - name: Raise the swap ceiling
+          become: true
+          # dphys-swapfile silently clamps CONF_SWAPSIZE to CONF_MAXSWAP,
+          # which defaults to 2048. Without this the requested size is
+          # quietly ignored.
+          ansible.builtin.lineinfile:
+            path: /etc/dphys-swapfile
+            regexp: '^\s*#?\s*CONF_MAXSWAP='
+            line: "CONF_MAXSWAP={{ build_swap_size_mb }}"
+            state: present
+
+        - name: Apply the new swap size
+          become: true
+          ansible.builtin.shell: |
+            set -e
+            dphys-swapfile swapoff
+            dphys-swapfile setup
+            dphys-swapfile swapon
+          register: swap_applied
+          changed_when: true
+
+        - name: Confirm the swap is active
+          ansible.builtin.command: swapon --show=NAME,SIZE --noheadings
+          register: swap_state
+          changed_when: false
+          failed_when: false
+
+        - name: Report the active swap
+          ansible.builtin.debug:
+            msg: "Swap now: {{ swap_state.stdout | default('unknown') | trim }}"
