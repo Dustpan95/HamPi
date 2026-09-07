@@ -111,6 +111,14 @@ jobs:
         # check covers the fldigi suite's download host, which is gone.
         run: ./tests/test_removed_ansible_args.sh
 
+      - name: Check task structure
+        # Catches list entries that are valid YAML but the wrong type -- a
+        # generated playbook once merged "- libflxmlrpc-dev" and "retries: 5"
+        # onto one line, producing a dict where a package name belonged.
+        # yamllint, ansible-lint and --syntax-check all passed it; it failed
+        # eight minutes into an image build.
+        run: ./tests/test_task_structure.sh
+
       - name: Run release packaging tests
         # Covers the split-and-reassemble path. A release the downloader
         # cannot put back together would only fail after several gigabytes

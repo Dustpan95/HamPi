@@ -26,7 +26,8 @@
         - build-essential
         - libfltk1.3-dev
         - libudev-dev
-        - libflxmlrpc-dev      retries: 5
+        - libflxmlrpc-dev
+      retries: 5
       delay: 30
       register: result
       until: result.failed == false

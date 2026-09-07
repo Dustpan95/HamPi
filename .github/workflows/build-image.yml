@@ -336,8 +336,11 @@ jobs:
           tail -n 40 qemu/console.log || true
           echo "============================================================="
           echo "### Boot markers"
+          # "systemd 257" rather than bare "systemd", which matches dozens of
+          # unrelated kernel lines and tells you nothing.
           for marker in "Linux version" "VFS: Mounted root" "Run /sbin/init" \
-                        "systemd" "Reached target" "login:" "Kernel panic"; do
+                        "systemd\[1\]: systemd" "Reached target" "login:" \
+                        "Kernel panic"; do
             n=$(grep -c "$marker" qemu/console.log 2>/dev/null || echo 0)
             printf '  %-22s %s\n' "$marker" "$n"
           done
