@@ -7,44 +7,80 @@
   gather_facts: no
   tasks:
 
-  - name: Set architecture for Raspberry Pi
-    set_fact:
-      architecture: "armv7l"
-    when: is_rpi|bool
+  # Two bugs, the same pair found in install_pat.yml.
+  #
+  # The architecture was hardcoded to armv7l for every Raspberry Pi. HAMRS
+  # publishes a linux-arm64 AppImage and Raspberry Pi OS has been 64-bit by
+  # default for years; a 32-bit AppImage will not run on a 64-bit system that
+  # has no armhf runtime installed, which a stock image does not.
+  #
+  # And the extraction did not work. It was
+  #
+  #   curl --silent "https://www.hamrs.app/" | grep -P "{{ architecture }}" \
+  #     | egrep -o "https://.*AppImage"
+  #
+  # which returns nothing against the page as it is served today. Checked,
+  # not assumed: the three AppImages are all there, and a pattern anchored on
+  # the architecture suffix finds each of them.
+  - name: Select the HAMRS AppImage architecture
+    ansible.builtin.set_fact:
+      hamrs_arch: >-
+        {{ 'arm64' if (is_arm | bool and is_arm_64 | bool)
+           else 'armv7l' if (is_arm | bool)
+           else 'x86_64' if (is_x86_64 | bool)
+           else '' }}
 
-  - name: Set architecture for Xubuntu
-    set_fact:
-       architecture: "x86_64"
-    when: is_pc|bool
+  - name: Refuse to guess at an architecture for HAMRS
+    ansible.builtin.assert:
+      that:
+        - hamrs_arch | length > 0
+      fail_msg: >-
+        HAMRS publishes AppImages for arm64, armv7l and x86_64 only.
+        Detected is_arm={{ is_arm }} is_arm_64={{ is_arm_64 }}
+        is_x86_64={{ is_x86_64 }}.
 
-  - name: Determine latest version of HAMRS on web (Raspberry Pi)
-    shell: curl --silent "https://www.hamrs.app/" | grep -P "{{ architecture }}" | egrep -o "https://.*AppImage"
-    retries: 5
-    delay: 30
-    register: download_url
-    until: download_url.failed == false
+  - name: Find the current HAMRS AppImage for {{ hamrs_arch }}
+    ansible.builtin.shell:
+      cmd: >-
+        curl -fsSL "https://www.hamrs.app/"
+        | grep -oE 'https://[^"'"'"']*linux-{{ hamrs_arch }}\.AppImage'
+        | head -1
+      executable: /bin/bash
+    register: hamrs_lookup
+    changed_when: false
+    failed_when: false
+    retries: 3
+    delay: 15
+    until: hamrs_lookup.rc == 0
 
-  - name: Derive HAMRS filename
-    shell: echo "{{ download_url.stdout }}" | grep -Po "hamrs-[0-9].*AppImage"
-    register: hamrs_filename
+  - name: Refuse to continue without a real HAMRS download
+    ansible.builtin.assert:
+      that:
+        - hamrs_lookup.stdout | trim is match('^https://.*linux-' + hamrs_arch + '\.AppImage$')
+      fail_msg: >-
+        Could not find a HAMRS AppImage for {{ hamrs_arch }} on hamrs.app.
+        Got '{{ hamrs_lookup.stdout | trim }}'.
+      success_msg: "{{ hamrs_lookup.stdout | trim }}"
 
-  - name: Download HAMRS from {{ download_url.stdout }} to /usr/bin/{{ hamrs_filename.stdout }}
+  - name: Record the HAMRS download and filename
+    ansible.builtin.set_fact:
+      hamrs_url: "{{ hamrs_lookup.stdout | trim }}"
+      hamrs_file: "{{ hamrs_lookup.stdout | trim | basename }}"
+
+  - name: Download HAMRS to /usr/bin/{{ hamrs_file }}
     become: yes
-    get_url:
-      url: "{{ download_url.stdout }}"
-      dest: /usr/bin/{{ hamrs_filename.stdout }}
+    ansible.builtin.get_url:
+      url: "{{ hamrs_url }}"
+      dest: "/usr/bin/{{ hamrs_file }}"
+      mode: '0755'
     retries: 5
     delay: 30
     register: result
     until: result.failed == false
 
-  - name: Set HAMRS to executable
-    become: yes
-    file: dest=/usr/bin/{{ hamrs_filename.stdout }} mode=755
-
   - name: Create hamrs.desktop
     become: yes
-    template:
+    ansible.builtin.template:
       src: "{{ playbook_dir }}/../templates/usr/share/applications/hamrs.desktop.j2"
       dest: /usr/share/applications/hamrs.desktop
       owner: root
@@ -53,4 +89,7 @@
 
   - name: Add HAMRS icon
     become: yes
-    copy: src="{{ playbook_dir }}/../files/usr/share/pixmaps/hamrs.png" dest=/usr/share/pixmaps/hamrs.png mode=644
+    ansible.builtin.copy:
+      src: "{{ playbook_dir }}/../files/usr/share/pixmaps/hamrs.png"
+      dest: /usr/share/pixmaps/hamrs.png
+      mode: '0644'
