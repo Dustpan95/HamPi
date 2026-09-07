@@ -46,7 +46,6 @@
     shell: rm *.o *.cpp *.ch heathosx makefile
     args:
       chdir: /usr/heatherx11
-      warn: no
 
   - name: Change Ownership of /usr/heatherx11/heather.cfg to {{ ham_user }}
     become: yes
@@ -55,5 +54,3 @@
   - name: Convert Windows line endings to Unix
     become: yes
     command: sed 's/\r//' -i "/usr/heatherx11/heather.cfg"
-    args:
-      warn: no

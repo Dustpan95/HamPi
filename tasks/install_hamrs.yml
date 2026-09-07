@@ -19,8 +19,6 @@
 
   - name: Determine latest version of HAMRS on web (Raspberry Pi)
     shell: curl --silent "https://www.hamrs.app/" | grep -P "{{ architecture }}" | egrep -o "https://.*AppImage"
-    args:
-      warn: no
     retries: 5
     delay: 30
     register: download_url

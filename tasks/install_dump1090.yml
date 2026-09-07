@@ -92,8 +92,6 @@
 
   - name: Determine latest version of dump1090-mutability on GitHub (AMD64)
     shell: curl --silent "https://github.com/abcd567a/dump1090/releases/" | grep -Po "dump1090-mutability_[0-9]+.[0-9]+.dev_amd64.deb" | head -n 1 | grep -Po "[0-9]+.[0-9]+" | tail -n 1
-    args:
-      warn: no
     register: dump1090_version
     when: is_x86_64|bool
     retries: 5

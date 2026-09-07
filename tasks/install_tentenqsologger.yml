@@ -43,7 +43,6 @@
     shell: rm 10QSOLogger.exe 10qsolog.bat
     args:
       chdir: /usr/1010qsologger
-      warn: no
 
   - name: Change /usr/1010qsologger/10qsolog.sh to Executable
     become: yes

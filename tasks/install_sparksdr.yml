@@ -13,8 +13,6 @@
 
   - name: Determine latest version of sparksdr on web
     shell: curl --silent "http://www.ihopper.org/radio/sparksdr2.htm" | grep -Po "http://www.ihopper.org/radio/download.aspx\?file=sparksdr[0-9]+_[0-9]+_[0-9]+_[0-9]+_linux.tar.gz" | grep -Po "[0-9]+_[0-9]+_[0-9]+_[0-9]+"
-    args:
-      warn: no
     register: sparksdr_version
     retries: 5
     delay: 30

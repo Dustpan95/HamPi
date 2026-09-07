@@ -83,8 +83,6 @@
 
   - name: Determine latest version of Pat (WinLink) (ARM) on GitHub
     shell: curl --silent "https://github.com/la5nta/pat/releases/" | grep "pat.*_linux_armhf.deb" | head -n 1 | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq
-    args:
-      warn: no
     register: pat_version
     when: is_arm|bool
     retries: 5
@@ -137,8 +135,6 @@
 
   - name: Determine latest version of Pat (WinLink) (x86) on GitHub
     shell: curl --silent "https://github.com/la5nta/pat/releases/" | grep "pat.*_linux_i386.deb" | head -n 1 | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq
-    args:
-      warn: no
     register: pat_version
     when: is_i386|bool
     retries: 5
@@ -173,8 +169,6 @@
 
   - name: Determine latest version of Pat (WinLink) (amd64) on GitHub
     shell: curl --silent "https://github.com/la5nta/pat/releases/" | grep "pat.*_linux_amd64.deb" | head -n 1 | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq
-    args:
-      warn: no
     register: pat_version
     when: is_x86_64|bool
     retries: 5

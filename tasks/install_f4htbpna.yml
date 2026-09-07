@@ -38,7 +38,6 @@
   - name: Fix Makefile to work around "breakage"
     command: sed 's/CFLAGS += -Wall -Wextra -g -O0/CFLAGS += -Wall -Wextra -g -O0 -fpermissive -Wno-narrowing/' -i Makefile
     args:
-      warn: no
       chdir: /home/{{ ham_user }}/hamradio/F4HTBPanadapter
 
   - name: Rewrite F4HTBPanadapter project install prefix

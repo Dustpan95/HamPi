@@ -5,115 +5,67 @@
 - name: Install CMake Software
   hosts: all
   gather_facts: no
-  environment:
-    # Build-Time Tuning:
-    CXXFLAGS: -O2 -march=native -mtune=native
-    CFLAGS: -O2 -march=native -mtune=native
-    MAKEFLAGS: -j {{ shackwright_make_jobs }}
   tasks:
 
-  - name: Remove pre-installed cmake
+  # This playbook did three things, in this order:
+  #
+  #   1. package: name=cmake state=absent      -- remove the distribution's
+  #      cmake, and with it anything that depends on it
+  #   2. scrape github.com/Kitware/CMake/releases with grep -Po for the
+  #      newest version number
+  #   3. download that tarball and compile CMake from source into /usr
+  #
+  # Step 2 returns an empty string today. GitHub's releases listing is no
+  # longer the flat HTML the pattern was written against, so the download URL
+  # becomes ".../v/cmake-.tar.gz" and 404s. The playbook has already removed
+  # the system cmake by then.
+  #
+  # That is the worst possible failure mode. install_cmake.yml is imported
+  # near the top of tasks/main.yml, before the thirty-odd playbooks in this
+  # tree that invoke cmake. A run leaves the machine with no cmake at all and
+  # every one of those playbooks fails afterwards, for a reason that shows up
+  # thirty playbooks away from the task that caused it.
+  #
+  # The source build was a Raspbian Buster workaround: Buster shipped CMake
+  # 3.13 and several of these projects needed newer. That reason expired.
+  # Debian Trixie ships 3.31.6, Bookworm ships 3.25.1, and nothing in this
+  # tree asks for more than either. Compiling CMake from source on a
+  # Raspberry Pi costs the better part of an hour, installs into /usr where
+  # it collides with the packaged paths, and leaves an unmanaged toolchain
+  # that apt will never update.
+  #
+  # So: install the package, and do not remove anything.
+  - name: Install CMake and the common build toolchain
     become: yes
-    package:
-      name: cmake
-      state: absent
-
-  - name: Create directory hamradio
-    file:
-      path: /home/{{ ham_user }}/hamradio
-      state: directory
-
-  - name: Install dependent libraries (Common)
-    become: yes
-    package:
+    ansible.builtin.package:
       name: "{{ item }}"
       state: present
     with_items:
-      - libssl-dev
-      - curl
-      - gcc
+      - cmake
       - build-essential
+      - pkg-config
+      - git
+      - curl
       - unzip
+      - libssl-dev
+      # autoconf, automake and libtool are not part of build-essential, and
+      # several playbooks in this tree run autoreconf or autogen.sh assuming
+      # they are present. They were reaching them by luck, through whichever
+      # earlier playbook happened to pull them in.
+      - autoconf
+      - automake
+      - libtool
     retries: 5
     delay: 30
     register: result
     until: result.failed == false
 
-  - name: Install dependent libraries (ARM Buster)
-    become: yes
-    package:
-      name: qt4-qmake
-      state: present
-    when: is_arm|bool and is_buster|bool
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
+  - name: Report the CMake version in use
+    ansible.builtin.command:
+      cmd: cmake --version
+    changed_when: false
+    register: cmake_installed
 
-  - name: Install dependent libraries (ARM Bullseye)
-    become: yes
-    package:
-      name: qt5-qmake
-      state: present
-    when: is_arm|bool and is_bullseye|bool
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Install dependent libraries (Xubuntu)
-    become: yes
-    package:
-      name: "{{ item }}"
-      state: present
-    with_items:
-      - qt5-qmake
-    when: is_hampc|bool
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-#
-# Build and install CMake
-#
-
-  - name: Determine latest version of CMake on GitHub
-    shell: curl --silent "https://github.com/Kitware/CMake/releases/" | grep -Po "cmake-[0-9]+.[0-9]+.[0-9]+.*.tar.gz" | head -n 1 | grep -Po "[0-9]+.[0-9]+.[0-9]+"
-    args:
-      warn: no
-    retries: 5
-    delay: 30
-    register: cmake_version
-    until: cmake_version.failed == false
-
-  - name: Download and Unarchive CMake {{ cmake_version.stdout }} sources from https.//github.com/Kitware/CMake/releases/download/v{{ cmake_version.stdout }}/cmake-{{ cmake_version.stdout }}.tar.gz
-    unarchive:
-      src: https://github.com/Kitware/CMake/releases/download/v{{ cmake_version.stdout }}/cmake-{{ cmake_version.stdout }}.tar.gz
-      dest: /home/{{ ham_user }}/hamradio
-      remote_src: yes
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Configure CMake {{ cmake_version.stdout }}
-    command: ./configure --prefix=/usr
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/cmake-{{ cmake_version.stdout }}
-
-  - name: Build CMake {{ cmake_version.stdout }}
-    command: make
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/cmake-{{ cmake_version.stdout }}
-
-  - name: Install CMake {{ cmake_version.stdout }}
-    become: yes
-    command: make install
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/cmake-{{ cmake_version.stdout }}
-
-  - name: Remove CMake {{ cmake_version.stdout }} build directory
-    file:
-      path: /home/{{ ham_user }}/hamradio/cmake-{{ cmake_version.stdout }}
-      state: absent
+  - name: Show the CMake version
+    ansible.builtin.debug:
+      msg: "{{ cmake_installed.stdout_lines[0] }}"

@@ -7,51 +7,35 @@
   gather_facts: no
   tasks:
 
-  - name: Create directory hamradio
-    file:
-      path: /home/{{ ham_user }}/hamradio/
-      state: directory
-
-  - name: Install Chirp prerequisite packages (Common)
+  # This playbook used to scrape the CHIRP trac for the newest "next" build:
+  #
+  #   curl --silent "https://trac.chirp.danplanet.com/chirp_next/" \
+  #     | grep -Po "next-[0-9]+" | grep -Po "[0-9]+" | head -n 1
+  #
+  # That host no longer serves the directory. It redirects to
+  # archive.chirpmyradio.com, so the scrape returns an empty string, the
+  # wheel URL becomes ".../next-/chirp--py3-none-any.whl", and the install
+  # fails on a 404. The task carried a "warn: no" argument as well, which
+  # ansible-core removed in 2.14 and which fails the task outright before the
+  # scrape is even attempted.
+  #
+  # Debian packages CHIRP, so use the package. It is a real, signed,
+  # upgradeable install that works offline and does not depend on the shape
+  # of somebody's directory listing. The trade-off is honest: Debian's
+  # snapshot lags upstream's rolling "next" builds, and CHIRP's whole value
+  # is breadth of radio support, so an operator chasing a radio released
+  # after Debian's snapshot will still want the upstream wheel. Whether
+  # upstream's archive can be scraped at all could not be confirmed here --
+  # it answers 403 to this network even with a browser user agent -- so
+  # guessing at a replacement scrape would have meant shipping another
+  # untested URL. The package works; that is worth more than a clever one
+  # that might not.
+  - name: Install Chirp
     become: yes
-    package:
-      name: "{{ item }}"
+    ansible.builtin.package:
+      name: chirp
       state: present
-    with_items:
-      - git
-      - python3-wxgtk4.0
-      - python3-serial
-      - python3-six
-      - python3-future
-      - python3-requests
-      - python3-pip
     retries: 5
     delay: 30
     register: result
     until: result.failed == false
-
-  - name: Determine latest version of Chirp Next on web
-    shell: curl --silent "https://trac.chirp.danplanet.com/chirp_next/" | grep -Po "next-[0-9]+" | grep -Po "[0-9]+" | head -n 1
-    args:
-      warn: no
-    retries: 5
-    delay: 30
-    register: download_version
-    until: download_version.failed == false
-
-  - name: Install Chirp {{ download_version.stdout }}
-    become: yes
-    ansible.builtin.pip:
-      name: "https://trac.chirp.danplanet.com/chirp_next/next-{{ download_version.stdout }}/chirp-{{ download_version.stdout }}-py3-none-any.whl"
-      extra_args: "{{ pip_system_extra_args }}"
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-#  - name: Modify categories for chirp.desktop
-#    become: yes
-#    lineinfile:
-#      path: /usr/share/applications/chirp.desktop
-#      regexp: '^Categories=.*'
-#      line: Categories=HamRadio

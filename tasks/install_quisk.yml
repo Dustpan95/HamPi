@@ -5,47 +5,33 @@
 - name: Install Quisk Software
   hosts: all
   gather_facts: no
-  environment:
-    # Build-Time Tuning:
-    CXXFLAGS: -O2 -march=native -mtune=native
-    CFLAGS: -O2 -march=native -mtune=native
-    MAKEFLAGS: -j {{ shackwright_make_jobs }}
   tasks:
 
-  # Use this for Python3
-  - name: Install dependent libraries
+  # Quisk was installed with "pip install quisk", which compiles C extensions
+  # against portaudio, ALSA, PulseAudio and FFTW at install time. On a Debian
+  # that enforces PEP 668 this needs --break-system-packages to proceed at
+  # all, and it then drops a compiled, unmanaged Python package into
+  # /usr/lib/python3/dist-packages where apt cannot see or upgrade it.
+  #
+  # Debian packages Quisk, built against the same libraries, so let apt own
+  # it. The nine -dev packages the source build needed are no longer
+  # installed: they were build dependencies for a build that no longer
+  # happens.
+  - name: Install Quisk
     become: yes
-    package:
-      name: "{{ item }}"
-      state: present
-    with_items:
-      - python3-wxgtk4.0
-      - libpython3-dev
-      - python3-usb
-      - python3-setuptools
-      - python3-pip
-      - libfftw3-dev
-      - libasound2-dev
-      - portaudio19-dev
-      - libpulse-dev
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Install quisk
-    become: yes
-    ansible.builtin.pip:
+    ansible.builtin.package:
       name: quisk
-      state: latest
-      extra_args: "{{ pip_system_extra_args }}"
+      state: present
     retries: 5
     delay: 30
     register: result
     until: result.failed == false
 
+  # The project's own desktop entry files Quisk under HamRadio in the menu,
+  # which is the point of the menu work elsewhere in this tree.
   - name: Copy quisk desktop file
     become: yes
-    copy:
+    ansible.builtin.copy:
       src: "{{ playbook_dir }}/../files/usr/share/applications/quisk.desktop"
       dest: "/usr/share/applications/quisk.desktop"
+      mode: '0644'

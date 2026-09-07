@@ -17,8 +17,6 @@
 
   - name: Determine latest version of wxtoimg on web (ARM)
     shell: curl --silent "https://wxtoimgrestored.xyz/downloads/" | grep -Po "wxtoimg-armhf-[0-9]+.[0-9]+.[0-9]+-beta.deb" | grep -Po "[0-9]+.[0-9]+.[0-9]+" | uniq | tail -n 1
-    args:
-      warn: no
     register: wxtoimg_version
     when: is_arm|bool
     retries: 5
@@ -40,7 +38,6 @@
     shell: tar -xzvf wxtoimg-linux-armhf-{{ wxtoimg_version.stdout }}-beta.tar.gz --directory /
     args:
       chdir: /home/{{ ham_user }}/hamradio/
-      warn: no
     when: is_arm|bool
 
   - name: Remove wxtoimg {{ wxtoimg_version.stdout }} gzip (ARM)
@@ -55,8 +52,6 @@
 
   - name: Determine latest version of wxtoimg on web (x86)
     shell: curl --silent "https://wxtoimgrestored.xyz/downloads/" | grep -Po "wxtoimg-i386-[0-9]+.[0-9]+.[0-9]+-beta.deb" | grep -Po "\-[0-9].*\-" | grep -Po "[0-9]+.[0-9]+.[0-9]"
-    args:
-      warn: no
     register: wxtoimg_version
     when: is_hampc|bool and is_i386|bool
     retries: 5
@@ -91,8 +86,6 @@
 
   - name: Determine latest version of wxtoimg on web (AMD64)
     shell: curl --silent "https://wxtoimgrestored.xyz/downloads/" | grep -Po "wxtoimg-amd64-[0-9]+.[0-9]+.[0-9]+-beta.deb" | grep -Po "\-[0-9].*\-" | grep -Po "[0-9]+.[0-9]+.[0-9]" | uniq
-    args:
-      warn: no
     register: wxtoimg_version
     when: is_hampc|bool and is_x86_64|bool
     retries: 5

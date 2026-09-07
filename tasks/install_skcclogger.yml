@@ -37,8 +37,6 @@
   - name: Change Ownership of /usr/SKCCLogger_Linux_32-Bit-ARM to {{ ham_user }}
     become: yes
     shell: chown -R {{ ham_user }}.{{ ham_user }} /usr/SKCCLogger_Linux_32-Bit-ARM
-    args:
-      warn: false
     when: is_arm|bool and not is_arm_64|bool
 
   - name: Remove SKCCLogger from local file (ARM)
@@ -76,8 +74,6 @@
   - name: Change Ownership of /usr/SKCCLogger_Linux_64-Bit to {{ ham_user }}
     become: yes
     shell: chown -R {{ ham_user }}.{{ ham_user }} /usr/SKCCLogger_Linux_64-Bit
-    args:
-      warn: false
     when: is_hampc|bool
 
   - name: Remove SKCCLogger from local file (Xubuntu)

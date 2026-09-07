@@ -43,7 +43,6 @@
     become: yes
     shell: git reset --hard
     args:
-      warn: no
       chdir: /spider
 
   - name: Remove spider.new directory

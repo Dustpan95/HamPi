@@ -4,164 +4,59 @@
 
 - name: Install VOACAPL
   hosts: all
-  environment:
-    # Build-Time Tuning:
-    CXXFLAGS: -O2 -march=native -mtune=native
-    CFLAGS: -O2 -march=native -mtune=native
-    # To avoid race condition in VOACAPL pipeline build in v0.7.5
-    MAKEFLAGS: -j 1
-#    MAKEFLAGS: -j {{ shackwright_make_jobs }}
   tasks:
 
-  - name: Create directory hamradio
-    file:
-      path: /home/{{ ham_user }}/hamradio
-      state: directory
-
-  - name: Install dependent components for VOACAPL
+  # Two source builds lived here, and both were broken.
+  #
+  # voacapl was cloned and built with autoreconf, but nothing in the playbook
+  # installs autoconf, automake or libtool -- build-essential does not carry
+  # them -- so "autoreconf -f -i" fails as soon as the playbook is run on its
+  # own rather than after something else that happened to pull them in.
+  #
+  # pythonprop was worse. Its version came from scraping the GitHub releases
+  # page with grep -Po, which now returns nothing at all, so the download URL
+  # became ".../archive/v.tar.gz". The scrape also carried a "warn: no"
+  # argument, removed from ansible-core in 2.14, which failed the task before
+  # the URL could even 404.
+  #
+  # Debian packages both: voacapl 0.7.6 and pythonprop 0.30.1. The
+  # dependencies the source builds needed -- gfortran, cartopy, scipy,
+  # matplotlib, yelp-tools -- go with them, and matplotlib in particular is
+  # no longer pip-installed over the top of the distribution's own copy.
+  - name: Install VOACAPL and pythonprop
     become: yes
-    package:
+    ansible.builtin.package:
       name: "{{ item }}"
       state: present
     with_items:
-      - build-essential
-      - gfortran
-      - python3-cartopy
-      - python3-scipy
+      - voacapl
+      - pythonprop
     retries: 5
     delay: 30
     register: result
     until: result.failed == false
 
-#
-# VOACAPL
-#
+  # voacapl reads its coefficient and configuration files from ~/itshfbc,
+  # which is per-user and created by makeitshfbc. This is deliberately run as
+  # the ham user rather than root: a root-owned itshfbc in the operator's
+  # home is a support call waiting to happen. install_user_skeleton.yml
+  # copies it into /etc/skel afterwards, so accounts created on first boot of
+  # a flashed image inherit it.
+  - name: Create the VOACAPL data directory for the ham user
+    ansible.builtin.command:
+      cmd: makeitshfbc
+      chdir: /home/{{ ham_user }}
+      creates: /home/{{ ham_user }}/itshfbc
 
-  - name: Git clone latest VOACAPL sources
-    git:
-      repo: https://github.com/jawatson/voacapl
-      dest: /home/{{ ham_user }}/hamradio/voacapl
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Autoreconf VOACAPL
-    command: autoreconf -f -i
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/voacapl
-
-  - name: Configure VOACAPL
-    command: ./configure --prefix=/usr
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/voacapl
-
-  - name: Build VOACAPL
-    command: make all
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/voacapl
-
-  - name: Install VOACAPL
-    become: yes
-    command: make install
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/voacapl
-
-  - name: Create VOACAPL data files
-    command: makeitshfbc
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/voacapl
-
-  - name: Clean VOACAPL
-    command: make clean
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/voacapl
-
-  - name: Remove voacapl build directory
-    file:
-      path: /home/{{ ham_user }}/hamradio/voacapl
-      state: absent
-
-#
-# VOACAPL Utility - pythonprop
-#
-
-  - name: Install dependent python module matplotlib
-    become: yes
-    ansible.builtin.pip:
-      name: matplotlib
-      extra_args: "{{ pip_system_extra_args }}"
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Install dependent components for pythonprop
-    become: yes
-    package:
-      name: "{{ item }}"
-      state: present
-    with_items:
-      - python3-cartopy
-      - yelp-tools
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Determine latest version of pythonprop on GitHub
-    shell: curl --silent "https://github.com/jawatson/pythonprop/releases" | grep -Po "/jawatson/pythonprop/tree/v[0-9]+.[0-9]+[a-zA-Z0-9\-]+" | head -n 1 | grep -Po "[0-9]+.[0-9]+[a-zA-Z0-9\-]+"
-    args:
-      warn: no
-    register: pythonprop_version
-    retries: 5
-    delay: 30
-    until: pythonprop_version.failed == false
-
-  - name: Download and Unarchive pythonprop {{ pythonprop_version.stdout }}
-    unarchive:
-      src: "https://github.com/jawatson/pythonprop/archive/v{{ pythonprop_version.stdout }}.tar.gz"
-      dest: "/home/{{ ham_user }}/hamradio/"
-      remote_src: yes
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Autogen pythonprop {{ pythonprop_version.stdout }}
-    command: ./autogen.sh
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/pythonprop-{{ pythonprop_version.stdout }}
-
-  - name: Configure pythonprop {{ pythonprop_version.stdout }}
-    command: ./configure --prefix=/usr
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/pythonprop-{{ pythonprop_version.stdout }}
-
-  - name: Build pythonprop {{ pythonprop_version.stdout }}
-    command: make all
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/pythonprop-{{ pythonprop_version.stdout }}
-
-  - name: Install pythonprop {{ pythonprop_version.stdout }}
-    become: yes
-    command: make install
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/pythonprop-{{ pythonprop_version.stdout }}
-
-  - name: Clean pythonprop {{ pythonprop_version.stdout }}
-    command: make clean
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/pythonprop-{{ pythonprop_version.stdout }}
-
-  - name: Remove pythonprop build directory
-    file:
-      path: /home/{{ ham_user }}/hamradio/pythonprop-{{ pythonprop_version.stdout }}
-      state: absent
+  - name: Check for the voacapgui desktop entry
+    ansible.builtin.stat:
+      path: /usr/share/applications/voacapgui.desktop
+    register: voacapgui_desktop
 
   - name: Modify categories for voacapgui.desktop
     become: yes
-    lineinfile:
+    ansible.builtin.lineinfile:
       path: /usr/share/applications/voacapgui.desktop
       regexp: '^Categories=.*'
       line: Categories=HamRadio Calculators
+    when: voacapgui_desktop.stat.exists

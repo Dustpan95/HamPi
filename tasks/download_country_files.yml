@@ -14,8 +14,6 @@
 
   - name: Determine latest version of CTY_FILES on web
     shell: curl --silent "https://www.country-files.com/cty/download/" | grep -Po "\<a href=\"[0-9]+\/\"\>[0-9]+\/\<\/a\>" | tail -n 1 | grep -Po "[0-9]+" | uniq
-    args:
-      warn: no
     register: cty_version
     retries: 5
     delay: 30
@@ -49,8 +47,6 @@
 
   - name: Determine latest version of BIGCTY on web
     shell: curl --silent "https://www.country-files.com/" | grep -Po "https://www.country-files.com/bigcty/download/2023/bigcty-[0-9]+.zip" | head -n 1 | grep -Po "\-[0-9]+" | grep -Po "[0-9]+"
-    args:
-      warn: no
     register: bigcty_version
 
   - name: Download and Unarchive Big CTY {{ bigcty_version.stdout }} from http://www.country-files.com/

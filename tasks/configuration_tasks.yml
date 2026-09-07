@@ -82,8 +82,6 @@
   - name: Enable resizing of (micro)SD card
     become: yes
     command: sed -i 's/ quiet splash plymouth.ignore-serial-consoles$/ quiet init=\/usr\/lib\/raspi-config\/init_resize.sh splash plymouth.ignore-serial-consoles/' /boot/cmdline.txt
-    args:
-      warn: no
     when: is_hampi|bool and cmdline_stat_result.stat.exists
 
   - name: Remove unwanted software packages (Raspberry Pi)

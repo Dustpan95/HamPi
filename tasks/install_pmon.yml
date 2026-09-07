@@ -19,8 +19,6 @@
   - name: Add SCS GPG Key
     become: yes
     shell: wget -q -O - https://www.scs-ptc.com/repo/packages/scs.gpg.key | apt-key add -
-    args:
-      warn: no
     retries: 5
     delay: 30
     register: result

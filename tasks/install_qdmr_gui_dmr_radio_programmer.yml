@@ -4,107 +4,44 @@
 
 - name: Install QDMR - GUI application and command line tool to program DMR radios
   hosts: all
-  environment:
-    # Build-Time Tuning:
-    CXXFLAGS: -O2 -march=native -mtune=native
-    CFLAGS: -O2 -march=native -mtune=native
-    MAKEFLAGS: -j {{ shackwright_make_jobs }}
   tasks:
 
-  - name: Create directory hamradio
-    file:
-      path: /home/{{ ham_user }}/hamradio
-      state: directory
-
-  - name: Install dependent libraries (Common)
-    become: yes
-    package:
-      name: "{{ item }}"
-      state: present
-    with_items:
-      - build-essential
-      - git
-      - libusb-1.0-0-dev
-      - qtbase5-dev
-      - qttools5-dev
-      - qttools5-dev-tools
-      - qtpositioning5-dev
-      - libqt5serialport5-dev
-      - libyaml-cpp-dev
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  # These were two tasks pinning the yaml-cpp shared library by soname:
-  # libyaml-cpp0.6 for older releases, libyaml-cpp0.7 for Jammy and Bookworm.
-  # The soname changes every release -- Trixie ships libyaml-cpp0.8 -- so
-  # Trixie took the "not Jammy or Bookworm" branch and tried to install
-  # libyaml-cpp0.6, which does not exist there. Every future release would
-  # break the same way and need another branch added.
+  # This was a source build: clone hmatuschek/qdmr, run cmake, make, make
+  # install. It failed on the trial runner because nothing in it installs
+  # cmake -- the build depended on install_cmake.yml having run first, so
+  # the playbook could not be run on its own or as part of a subset, which
+  # is exactly how the image build runs playbooks.
   #
-  # libyaml-cpp-dev is the stable name and depends on whichever runtime
-  # soname the release actually ships, so apt resolves it correctly. qdmr is
-  # compiled from source below, so the development package is what is needed.
-  - name: Install dependent libraries
-    become: yes
-    package:
-      name: libyaml-cpp-dev
-      state: present
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Git clone latest QDMR sources
-    git:
-      repo: https://github.com/hmatuschek/qdmr
-      dest: /home/{{ ham_user }}/hamradio/qdmr
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Create directory qdmr/build
-    file:
-      path: /home/{{ ham_user }}/hamradio/qdmr/build
-      state: directory
-
-  - name: Build QDMR Makefiles
-    command: cmake --install-prefix=/usr .. -Wno-dev
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/qdmr/build
-
-  - name: Build QDMR
-    command: make
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/qdmr/build
-
+  # Fixing that by adding cmake to the dependency list would have left the
+  # rest: eleven Qt5 -dev packages, a full C++ build of a Qt application on
+  # a Raspberry Pi, and a checkout of the master branch, which is whatever
+  # upstream pushed most recently rather than a release anyone tested.
+  #
+  # Debian packages qdmr 0.12.1, built against the Qt the release actually
+  # ships, with the udev rules included. The udevadm reload the source build
+  # needed is handled by the package's own trigger.
   - name: Install QDMR
     become: yes
-    command: make install
-    args:
-      chdir: /home/{{ ham_user }}/hamradio/qdmr/build
+    ansible.builtin.package:
+      name: qdmr
+      state: present
+    retries: 5
+    delay: 30
+    register: result
+    until: result.failed == false
 
-  - name: Run udevadm to activate new USB rule file
-    become: yes
-    command: udevadm control --reload-rules
+  - name: Check for the QDMR desktop entry
+    ansible.builtin.stat:
+      path: /usr/share/applications/qdmr.desktop
+    register: qdmr_desktop
 
+  # File it under HamRadio in the menu. Guarded on the file existing, because
+  # a desktop entry's path is the package's business and not something to
+  # fail an install over if a future release moves it.
   - name: Modify categories for qdmr.desktop
     become: yes
-    lineinfile:
+    ansible.builtin.lineinfile:
       path: /usr/share/applications/qdmr.desktop
       regexp: '^Categories=.*'
       line: Categories=HamRadio
-
-  - name: Modify icon path for qdmr.desktop
-    become: yes
-    lineinfile:
-      path: /usr/share/applications/qdmr.desktop
-      regexp: '^Icon=qdmr'
-      line: Icon=/usr/share/icons/hicolor/64x64/qdmr.png
-
-  - name: Remove QDMR
-    file:
-      path: /home/{{ ham_user }}/hamradio/qdmr
-      state: absent
+    when: qdmr_desktop.stat.exists
