@@ -2,7 +2,7 @@
 # Copyright 2020 - 2023, Dave Slotter (W3DJS). All rights reserved.
 #
 
-- name: Install FLDigi
+- name: Install fldigi
   hosts: all
   environment:
     # Build-Time Tuning:
@@ -12,13 +12,14 @@
   tasks:
 
     - name: Create directory hamradio
-      file:
+      ansible.builtin.file:
         path: /home/{{ ham_user }}/hamradio
         state: directory
+        mode: '0755'
 
     - name: Install dependent libraries
       become: yes
-      package:
+      ansible.builtin.package:
         name: "{{ item }}"
         state: present
       with_items:
@@ -27,71 +28,32 @@
         - libsamplerate0-dev
         - portaudio19-dev
         - libsndfile1-dev
-#        - libjpeg9-dev
         - libxft-dev
         - libxinerama-dev
         - libxcursor-dev
         - libusb-1.0-0-dev
         - libpulse-dev
         - pavucontrol
-      retries: 5
+        - libflxmlrpc-dev      retries: 5
       delay: 30
       register: result
       until: result.failed == false
 
-    - name: Determine latest version of FLDigi on web
-      shell: curl --silent "http://www.w1hkj.com/files/fldigi/" | grep -Po "[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz" | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq | tail -n 1
-      register: download_date
-      retries: 5
-      delay: 30
-      until: download_date.failed == false
+    - name: Build and install fldigi from source
+      ansible.builtin.include_tasks: build_w1hkj_program.yml
+      vars:
+        w1hkj_program: fldigi
 
-    - name: Download and Unarchive FLDigi {{ download_date.stdout }}
-      unarchive:
-        src: "http://www.w1hkj.com/files/fldigi/fldigi-{{ download_date.stdout }}.tar.gz"
-        dest: "/home/{{ ham_user }}/hamradio/"
-        remote_src: yes
-      retries: 5
-      delay: 30
-      register: result
-      until: result.failed == false
+    # fldigi ships a second program, flarq, with its own desktop entry.
+    - name: Check for the flarq desktop entry
+      ansible.builtin.stat:
+        path: /usr/share/applications/flarq.desktop
+      register: flarq_desktop
 
-    - name: Configure FlDigi {{ download_date.stdout }}
-      command: ./configure --prefix=/usr
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/fldigi-{{ download_date.stdout }}
-
-    - name: Build FlDigi {{ download_date.stdout }}
-      command: make all
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/fldigi-{{ download_date.stdout }}
-
-    - name: Install FlDigi {{ download_date.stdout }}
+    - name: File flarq under HamRadio in the menu
       become: yes
-      command: make install
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/fldigi-{{ download_date.stdout }}
-
-    - name: Modify categories for flarq.desktop
-      become: yes
-      lineinfile:
+      ansible.builtin.lineinfile:
         path: /usr/share/applications/flarq.desktop
         regexp: '^Categories=.*'
         line: Categories=HamRadio Fldigi
-
-    - name: Modify categories for fldigi.desktop
-      become: yes
-      lineinfile:
-        path: /usr/share/applications/fldigi.desktop
-        regexp: '^Categories=.*'
-        line: Categories=HamRadio Fldigi
-
-    - name: Clean FlDigi {{ download_date.stdout }}
-      command: make clean
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/fldigi-{{ download_date.stdout }}
-
-    - name: Remove FlDigi {{ download_date.stdout }} build directory
-      file:
-        path: /home/{{ ham_user }}/hamradio/fldigi-{{ download_date.stdout }}
-        state: absent
+      when: flarq_desktop.stat.exists

@@ -68,6 +68,7 @@ jobs:
             case "$playbook" in
               tasks/main.yml) continue ;;
               tasks/build_HamClock_by_WB0OEW.yml) continue ;;
+              tasks/build_w1hkj_program.yml) continue ;;
               tasks/install_librtlsdr.yml) continue ;;
               library/install_buster_repo.yml) continue ;;
             esac
@@ -101,6 +102,14 @@ jobs:
         # and in particular what it must not: the build user's shell history,
         # SSH keys or credential caches.
         run: ./tests/test_skel.sh
+
+      - name: Check for removed Ansible arguments and dead download hosts
+        # "warn" was removed from command and shell in ansible-core 2.14 and
+        # fails the task outright. It was here 39 times across 31 files, 27 of
+        # them imported by main.yml, so a quarter of a full run could not
+        # succeed on any Ansible newer than November 2022. The w1hkj.com
+        # check covers the fldigi suite's download host, which is gone.
+        run: ./tests/test_removed_ansible_args.sh
 
       - name: Run release packaging tests
         # Covers the split-and-reassemble path. A release the downloader

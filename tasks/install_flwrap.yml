@@ -12,64 +12,25 @@
   tasks:
 
     - name: Create directory hamradio
-      file:
-        path: /home/{{ ham_user }}/hamradio/
+      ansible.builtin.file:
+        path: /home/{{ ham_user }}/hamradio
         state: directory
+        mode: '0755'
 
     - name: Install dependent libraries
       become: yes
-      package:
+      ansible.builtin.package:
         name: "{{ item }}"
         state: present
       with_items:
         - build-essential
         - libfltk1.3-dev
-      retries: 5
+        - libflxmlrpc-dev      retries: 5
       delay: 30
       register: result
       until: result.failed == false
 
-    - name: Determine latest version of flwrap on web
-      shell: curl --silent "http://www.w1hkj.com/files/flwrap/" | grep -Po "[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz" | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq | tail -n 1
-      register: download_date
-      retries: 5
-      delay: 30
-      until: download_date.failed == false
-
-    - name: Download and Unarchive flwrap {{ download_date.stdout }}
-      unarchive:
-        src: "http://www.w1hkj.com/files/flwrap/flwrap-{{ download_date.stdout }}.tar.gz"
-        dest: /home/{{ ham_user }}/hamradio/
-        remote_src: yes
-      retries: 5
-      delay: 30
-      register: result
-      until: result.failed == false
-
-    - name: Configure flwrap {{ download_date.stdout }}
-      command: ./configure --prefix=/usr
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flwrap-{{ download_date.stdout }}
-
-    - name: Build flwrap {{ download_date.stdout }}
-      command: make all
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flwrap-{{ download_date.stdout }}
-
-    - name: Install flwrap {{ download_date.stdout }}
-      become: yes
-      command: make install
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flwrap-{{ download_date.stdout }}
-
-    - name: Modify categories for flwrap.desktop
-      become: yes
-      lineinfile:
-        path: /usr/share/applications/flwrap.desktop
-        regexp: '^Categories=.*'
-        line: Categories=HamRadio Fldigi
-
-    - name: Remove flwrap {{ download_date.stdout }} build directory
-      file:
-        path: /home/{{ ham_user }}/hamradio/flwrap-{{ download_date.stdout }}
-        state: absent
+    - name: Build and install flwrap from source
+      ansible.builtin.include_tasks: build_w1hkj_program.yml
+      vars:
+        w1hkj_program: flwrap

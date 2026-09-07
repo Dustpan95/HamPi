@@ -12,64 +12,31 @@
   tasks:
 
     - name: Create directory hamradio
-      file:
+      ansible.builtin.file:
         path: /home/{{ ham_user }}/hamradio
         state: directory
+        mode: '0755'
 
     - name: Install dependent libraries
       become: yes
-      package:
+      ansible.builtin.package:
         name: "{{ item }}"
         state: present
       with_items:
         - build-essential
         - libfltk1.3-dev
+        # These programs speak XML-RPC to fldigi. The tree used to build
+        # flxmlrpc from source for this; Debian packages it.
+        - libflxmlrpc-dev
       retries: 5
       delay: 30
       register: result
       until: result.failed == false
 
-    - name: Determine latest version of flnet on web
-      shell: curl --silent "http://www.w1hkj.com/files/flnet/" | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq | tail -n 1
-      register: download_date
-      retries: 5
-      delay: 30
-      until: download_date.failed == false
-
-    - name: Download and Unarchive flnet {{ download_date.stdout }}
-      unarchive:
-        src: "http://www.w1hkj.com/files/flnet/flnet-{{ download_date.stdout }}.tar.gz"
-        dest: "/home/{{ ham_user }}/hamradio/"
-        remote_src: yes
-      retries: 5
-      delay: 30
-      register: result
-      until: result.failed == false
-
-    - name: Configure flnet {{ download_date.stdout }}
-      command: ./configure --prefix=/usr
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flnet-{{ download_date.stdout }}
-
-    - name: Build flnet {{ download_date.stdout }}
-      command: make all
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flnet-{{ download_date.stdout }}
-
-    - name: Install flnet {{ download_date.stdout }}
-      become: yes
-      command: make install
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flnet-{{ download_date.stdout }}
-
-    - name: Modify categories for flnet.desktop
-      become: yes
-      lineinfile:
-        path: /usr/share/applications/flnet.desktop
-        regexp: '^Categories=.*'
-        line: Categories=HamRadio Fldigi
-
-    - name: Remove flnet {{ download_date.stdout }} build directory
-      file:
-        path: /home/{{ ham_user }}/hamradio/flnet-{{ download_date.stdout }}
-        state: absent
+    # Debian does not package flnet, so it is built from source. The build
+    # itself is shared -- see build_w1hkj_program.yml for why the version
+    # lookup is written the way it is.
+    - name: Build and install flnet from source
+      ansible.builtin.include_tasks: build_w1hkj_program.yml
+      vars:
+        w1hkj_program: flnet

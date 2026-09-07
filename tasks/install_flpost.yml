@@ -4,70 +4,27 @@
 
 - name: Install flpost
   hosts: all
-  environment:
-    # Build-Time Tuning:
-    CXXFLAGS: -O2 -march=native -mtune=native
-    CFLAGS: -O2 -march=native -mtune=native
-    MAKEFLAGS: -j {{ shackwright_make_jobs }}
+  gather_facts: no
   tasks:
 
-    - name: Create directory hamradio
-      file:
-        path: /home/{{ ham_user }}/hamradio
-        state: directory
-
-    - name: Install dependent libraries
-      become: yes
-      package:
-        name: "{{ item }}"
-        state: present
-      with_items:
-        - build-essential
-        - libfltk1.3-dev
-        - libcurl4-openssl-dev
-        - libsamplerate0-dev
-
-    - name: Determine latest version of flpost on web
-      shell: curl --silent "http://www.w1hkj.com/alpha/flpost/" | grep -Po "[0-9]+\.[0-9]+\.[0-9]+\.tar\.gz" | grep -Po "[0-9]+\.[0-9]+\.[0-9]+" | uniq | tail -n 1
-      register: download_date
-      retries: 5
-      delay: 30
-      until: download_date.failed == false
-
-    - name: Download and Unarchive flpost {{ download_date.stdout }}
-      unarchive:
-        src: "http://www.w1hkj.com/alpha/flpost/flpost-{{ download_date.stdout }}.tar.gz"
-        dest: "/home/{{ ham_user }}/hamradio/"
-        remote_src: yes
-      retries: 5
-      delay: 30
-      register: result
-      until: result.failed == false
-
-    - name: Configure flpost {{ download_date.stdout }}
-      command: ./configure --prefix=/usr --without-flxmlrpc
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flpost-{{ download_date.stdout }}
-
-    - name: Build flpost {{ download_date.stdout }}
-      command: make all
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flpost-{{ download_date.stdout }}
-
-    - name: Install flpost {{ download_date.stdout }}
-      become: yes
-      command: make install
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/flpost-{{ download_date.stdout }}
-
-    - name: Modify categories for flpost.desktop
-      become: yes
-      lineinfile:
-        path: /usr/share/applications/flpost.desktop
-        regexp: '^Categories=.*'
-        line: Categories=HamRadio Fldigi
-
-    - name: Remove flpost {{ download_date.stdout }} build directory
-      file:
-        path: /home/{{ ham_user }}/hamradio/flpost-{{ download_date.stdout }}
-        state: absent
+  # flpost has no source left to build.
+  #
+  # This playbook downloaded from http://www.w1hkj.com/alpha/flpost/, which
+  # answers 404. Unlike the rest of the w1hkj suite it is not on SourceForge
+  # either -- the fldigi project's file listing has directories for flaa,
+  # flamp, flcluster, fldigi, fllog, flmsg, flnet, flrig, flwkey, flwrap and
+  # flxmlrpc, and no flpost. It was distributed from an "alpha" directory
+  # rather than "files", so it was never a release to begin with. Debian does
+  # not package it.
+  #
+  # There is nothing to point this at. Rather than leave a playbook that can
+  # only fail, or quietly drop a program someone may be looking for, it says
+  # so and moves on. The import stays in tasks/main.yml so the message is
+  # seen by anyone who expected flpost to be here.
+  - name: Report that flpost is no longer available
+    ansible.builtin.debug:
+      msg: >-
+        flpost is not installed: its upstream download
+        (w1hkj.com/alpha/flpost) returns 404, it is absent from the fldigi
+        project's SourceForge file listing, and Debian does not package it.
+        If you know of a current source, it belongs in this file.

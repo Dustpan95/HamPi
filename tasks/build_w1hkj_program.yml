@@ -1,0 +1,112 @@
+#
+# Shared build steps for the w1hkj programs Debian does not package.
+#
+# Included with include_tasks and a single variable:
+#
+#   - ansible.builtin.include_tasks: build_w1hkj_program.yml
+#     vars:
+#       w1hkj_program: flnet
+#
+# Five playbooks -- flaa, flcluster, fllog, flnet and flwkey -- were byte for
+# byte the same build with a different name substituted, which meant five
+# copies of the same two defects.
+#
+# The first was the download host. Every one of them fetched from
+# http://www.w1hkj.com/files/<program>/, which no longer exists; the server
+# answers 404 for the whole directory.
+#
+# The second was worse, and is the reason this file asserts rather than
+# trusts. Each playbook found "the latest version" by curling that directory
+# listing and running grep -Po over the HTML, then interpolated the result
+# straight into a download URL. With the directory gone the pattern usually
+# matches nothing, giving ".../flaa-.tar.gz" and a 404. But install_flnet's
+# pattern was loose enough to match a number out of the body of the 404 page
+# itself, and it returned "7.0.4" -- a version flnet has never had; the real
+# current release is 7.5.0. It did not fail. It would have gone looking for a
+# tarball that never existed, and had one happened to exist it would have
+# installed it. A version number scraped out of an error page is the kind of
+# bug that costs an afternoon to find.
+#
+# So the version now comes from SourceForge's RSS feed, which is generated
+# from the actual file listing, and the result is checked against a strict
+# pattern before it is allowed anywhere near a URL. If it does not look like
+# a version, this stops with an explanation instead of building a URL out of
+# an empty string.
+
+- name: Determine the latest {{ w1hkj_program }} release on SourceForge
+  ansible.builtin.shell:
+    cmd: >-
+      curl -fsSL "https://sourceforge.net/projects/fldigi/rss?path=/{{ w1hkj_program }}"
+      | grep -oP '{{ w1hkj_program }}-\K[0-9]+(\.[0-9]+)+(?=\.tar\.gz)'
+      | head -1
+    executable: /bin/bash
+  register: w1hkj_lookup
+  changed_when: false
+  failed_when: false
+  retries: 3
+  delay: 15
+  until: w1hkj_lookup.rc == 0
+
+- name: Refuse to continue without a real {{ w1hkj_program }} version
+  ansible.builtin.assert:
+    that:
+      - w1hkj_lookup.stdout | trim is match('^[0-9]+(\.[0-9]+)+$')
+    fail_msg: >-
+      Could not determine a {{ w1hkj_program }} version from SourceForge.
+      Got '{{ w1hkj_lookup.stdout | trim }}'. Stopping here on purpose:
+      interpolating that into a download URL is what the previous version of
+      this playbook did, and it produced either a 404 or a version number
+      scraped out of an error page. Check
+      https://sourceforge.net/projects/fldigi/files/{{ w1hkj_program }}/
+    success_msg: "{{ w1hkj_program }} {{ w1hkj_lookup.stdout | trim }}"
+
+- name: Record the {{ w1hkj_program }} version
+  ansible.builtin.set_fact:
+    w1hkj_ver: "{{ w1hkj_lookup.stdout | trim }}"
+
+- name: Download and unarchive {{ w1hkj_program }} {{ w1hkj_ver }}
+  ansible.builtin.unarchive:
+    src: >-
+      https://downloads.sourceforge.net/project/fldigi/{{ w1hkj_program }}/{{
+      w1hkj_program }}-{{ w1hkj_ver }}.tar.gz
+    dest: "/home/{{ ham_user }}/hamradio/"
+    remote_src: yes
+    creates: "/home/{{ ham_user }}/hamradio/{{ w1hkj_program }}-{{ w1hkj_ver }}"
+  retries: 5
+  delay: 30
+  register: result
+  until: result.failed == false
+
+- name: Configure {{ w1hkj_program }} {{ w1hkj_ver }}
+  ansible.builtin.command:
+    cmd: ./configure --prefix=/usr
+    chdir: "/home/{{ ham_user }}/hamradio/{{ w1hkj_program }}-{{ w1hkj_ver }}"
+
+- name: Build {{ w1hkj_program }} {{ w1hkj_ver }}
+  ansible.builtin.command:
+    cmd: make all
+    chdir: "/home/{{ ham_user }}/hamradio/{{ w1hkj_program }}-{{ w1hkj_ver }}"
+
+- name: Install {{ w1hkj_program }} {{ w1hkj_ver }}
+  become: yes
+  ansible.builtin.command:
+    cmd: make install
+    chdir: "/home/{{ ham_user }}/hamradio/{{ w1hkj_program }}-{{ w1hkj_ver }}"
+
+- name: Check for the {{ w1hkj_program }} desktop entry
+  ansible.builtin.stat:
+    path: "/usr/share/applications/{{ w1hkj_program }}.desktop"
+  register: w1hkj_desktop
+
+- name: File {{ w1hkj_program }} under HamRadio in the menu
+  become: yes
+  ansible.builtin.lineinfile:
+    path: "/usr/share/applications/{{ w1hkj_program }}.desktop"
+    regexp: '^Categories=.*'
+    line: Categories=HamRadio Fldigi
+  when: w1hkj_desktop.stat.exists
+
+- name: Remove the {{ w1hkj_program }} build directory
+  ansible.builtin.file:
+    path: "/home/{{ ham_user }}/hamradio/{{ w1hkj_program }}-{{ w1hkj_ver }}"
+    state: absent
