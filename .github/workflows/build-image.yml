@@ -239,6 +239,32 @@ jobs:
           path: ansible-output/
           retention-days: 14
 
-      - name: Fail if any playbook failed
-        if: steps.install.outputs.rc != '0'
-        run: exit 1
+      - name: Report failures and fail the job
+        # Printed here, as the last step, deliberately. Earlier revisions put
+        # this in the Summarize step, which sits above the artifact uploads --
+        # far enough up a long log that the reason a build failed could not be
+        # read back without downloading the artifact. Last step means the tail
+        # of the log is the diagnosis.
+        if: always()
+        run: |
+          rc=0
+          for log in ansible-output/*.log; do
+            [ -f "$log" ] || continue
+            name=$(basename "$log" .log)
+            f=$(grep -oE 'failed=[0-9]+' "$log" | tail -1 | cut -d= -f2)
+            if [ "${f:-1}" != "0" ]; then
+              rc=1
+              echo "=============================================================="
+              echo "FAILED: ${name}"
+              echo "=============================================================="
+              # The last TASK banner before the failure, then the tail, which
+              # carries the error and the recap whatever wording Ansible used.
+              awk '/failed=[1-9]/{exit} /^TASK \[/{t=$0} END{print "Last task started: " t}' "$log"
+              echo "--------------------------------------------------------------"
+              tail -n 40 "$log"
+              echo
+            else
+              echo "OK: ${name}"
+            fi
+          done
+          exit "$rc"
