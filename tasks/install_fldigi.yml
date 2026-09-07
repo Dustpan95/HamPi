@@ -35,6 +35,16 @@
         - libpulse-dev
         - pavucontrol
         - libflxmlrpc-dev
+        # Build 7 compiled about 180 objects and then stopped on
+        #   cmedia/hid_lin.cxx:42:10: fatal error: libudev.h: No such file
+        # fldigi's cmedia HID support needs the udev headers. The original
+        # playbook never listed them, and never found out, because its
+        # download 404'd long before anything was compiled.
+        #
+        # Both of these come from Debian's own Build-Depends for the fldigi
+        # source package rather than from guessing at the next failure.
+        - libudev-dev
+        - libpng-dev
       retries: 5
       delay: 30
       register: result
