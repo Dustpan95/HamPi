@@ -295,6 +295,25 @@ jobs:
               echo "  none"
             fi
             echo
+            # Hamlib deliberately tracks its development branch, so "which
+            # version" is a real question with a changing answer. Ask the
+            # binaries rather than the playbooks. Timeout-guarded and
+            # failure-tolerant: a program that will not answer --version is
+            # not a reason to fail a build.
+            echo "== Versions reported by source-built programs =="
+            printed=0
+            for prog in rigctl rotctl fldigi flarq flnet flrig; do
+              v=$(sudo timeout 15 chroot "$MNT" sh -c \
+                "command -v $prog >/dev/null 2>&1 && $prog --version 2>/dev/null | head -1" \
+                2>/dev/null || true)
+              if [ -n "$v" ]; then
+                printf '  %-8s %s\n' "$prog" "$v"
+                printed=1
+              fi
+            done
+            [ "$printed" -eq 1 ] || echo "  none answered --version"
+
+            echo
             echo "== Totals =="
             printf '  packages installed: %s\n' \
               "$(sudo chroot "$MNT" dpkg-query -f '.\n' -W 2>/dev/null | wc -l)"

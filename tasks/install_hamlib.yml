@@ -52,14 +52,37 @@
       register: result
       until: result.failed == false
 
+    # Deliberately unpinned. This tracks Hamlib's development branch, which
+    # is where new rig backends land, and rig support is the entire reason to
+    # build Hamlib from source instead of installing Debian's. For reference:
+    # Debian trixie ships 4.6.2, the current Hamlib release is 4.7.2, and
+    # master is ahead of both. A radio released last month is supported here
+    # and in neither of the others.
+    #
+    # The cost is that two builds a week apart are not the same build. That is
+    # recorded rather than removed. The commit is printed below, so it lands
+    # in ansible-output/install_hamlib.log, and the built version appears in
+    # the image manifest. If a bad commit ever lands upstream, an operator can
+    # pin without editing this file:
+    #
+    #   ./run_shackwright -e hamlib_version=4.7.2
+    #   ./run_shackwright -e hamlib_version=<commit sha>
     - name: Git clone latest Hamlib sources
       git:
         repo: https://github.com/Hamlib/Hamlib.git
         dest: /home/{{ ham_user }}/hamradio/hamlib
+        version: "{{ hamlib_version | default(omit) }}"
       retries: 5
       delay: 30
-      register: result
-      until: result.failed == false
+      register: hamlib_clone
+      until: hamlib_clone.failed == false
+
+    - name: Record which Hamlib commit is being built
+      ansible.builtin.debug:
+        msg: >-
+          Hamlib commit {{ hamlib_clone.after | default('unknown') }}
+          {{ '(pinned to ' ~ hamlib_version ~ ')' if hamlib_version is defined
+             else '(tracking the development branch)' }}
 
     - name: Bootstrap Hamlib
       command: ./bootstrap
