@@ -6,6 +6,27 @@ Maintainer: [Dustpan95](https://github.com/Dustpan95).
 **Status: installer foundation, awaiting physical station validation. There is no new flashable image yet.**
 Use the `dietpi/` entry point for this work. The historical root-level playbooks are retained for reference and are not the DietPi installer.
 
+## Emulation without a Pi
+
+The `ARM64 emulation` Actions workflow runs only on `Testing` in a public repository,
+using a standard Ubuntu runner with a 45-minute limit. QEMU runs Debian Trixie ARM64
+userspace in a disposable container. No caches or artifacts are uploaded; results
+and exact package versions are in the job logs.
+
+It installs every initial profile using the same package/configuration tasks as
+the production installer, checks a second pass makes no changes, checks account
+groups and installation records, queries Hamlib's dummy rig, and launches Xfce's
+panel, WSJT-X, FLDigi, FLRig and Gqrx as a non-root user on a virtual X11 screen.
+GUI success means a process remains alive and a matching window appears;
+first-run dialogs count, so this does not prove complete application operation.
+
+The harness installs Xfce from Debian packages, not DietPi-Software. It does not
+fake DietPi markers or relax the production platform checks. This is not a Pi
+boot/image test and cannot validate DietPi first boot, graphics acceleration,
+USB devices, FT-991 CAT/PTT, SignaLink audio or RF operation. Container and package
+inputs currently follow repository updates; logged versions are evidence, not
+a reproducible-release lock.
+
 ## Initial target
 
 - Raspberry Pi 4 Model B and Raspberry Pi 5 Model B.

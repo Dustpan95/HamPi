@@ -1,0 +1,37 @@
+name: ARM64 emulation
+on:
+  push:
+    branches: [Testing]
+    paths: ['dietpi/**', '.github/workflows/dietpi-emulation.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: arm64-emulation-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  emulation:
+    if: github.ref == 'refs/heads/Testing' && github.event.repository.private == false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130
+        with:
+          platforms: arm64
+          cache-image: false
+      - name: Install and smoke-test ARM64 software
+        run: |
+          docker pull --platform linux/arm64 debian:trixie-slim
+          docker image inspect debian:trixie-slim --format '{{json .RepoDigests}}'
+          docker run --rm --platform linux/arm64 --cpus=2 --memory=6g \
+            --mount type=bind,src="$GITHUB_WORKSPACE",dst=/source,readonly \
+            debian:trixie-slim bash /source/dietpi/emulation/run.sh
+      - name: Record scope
+        if: always()
+        run: |
+          echo 'ARM64 Debian userspace under QEMU; see step logs for results.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Not a bootable-image, DietPi software-manager, USB, CAT/PTT or RF validation.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'Standard public-repository runner only. No artifact or cache uploads.' >> "$GITHUB_STEP_SUMMARY"
