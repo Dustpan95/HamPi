@@ -36,27 +36,21 @@
     register: result
     until: result.failed == false
 
-  - name: Install dependent libraries (Not Jammy or Bookworm)
+  # These were two tasks pinning the yaml-cpp shared library by soname:
+  # libyaml-cpp0.6 for older releases, libyaml-cpp0.7 for Jammy and Bookworm.
+  # The soname changes every release -- Trixie ships libyaml-cpp0.8 -- so
+  # Trixie took the "not Jammy or Bookworm" branch and tried to install
+  # libyaml-cpp0.6, which does not exist there. Every future release would
+  # break the same way and need another branch added.
+  #
+  # libyaml-cpp-dev is the stable name and depends on whichever runtime
+  # soname the release actually ships, so apt resolves it correctly. qdmr is
+  # compiled from source below, so the development package is what is needed.
+  - name: Install dependent libraries
     become: yes
     package:
-      name: "{{ item }}"
+      name: libyaml-cpp-dev
       state: present
-    with_items:
-      - libyaml-cpp0.6
-    when: not is_jammy|bool and not is_bookworm|bool
-    retries: 5
-    delay: 30
-    register: result
-    until: result.failed == false
-
-  - name: Install dependent libraries (Jammy or Bookworm)
-    become: yes
-    package:
-      name: "{{ item }}"
-      state: present
-    with_items:
-      - libyaml-cpp0.7
-    when: is_jammy|bool or is_bookworm|bool
     retries: 5
     delay: 30
     register: result

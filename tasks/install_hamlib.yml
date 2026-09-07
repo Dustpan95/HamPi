@@ -91,6 +91,14 @@
         - libreadline-dev
         - libxml2-dev
         - libgd-dev
+        # These three were previously listed only under Bullseye, Jammy and
+        # Inovato. Bookworm and Trixie matched none of those branches and so
+        # installed neither, while ./configure is still asked for
+        # --with-python-binding. Without python3-dev the bindings fail to
+        # build. They are common dependencies, so they belong here.
+        - python3-dev
+        - libnova-dev
+        - libindi-dev
       retries: 5
       delay: 30
       register: result
@@ -110,29 +118,23 @@
       args:
         chdir: /home/{{ ham_user }}/hamradio/hamlib
 
-    - name: Configure Hamlib (Buster)
-      command: ./configure --with-python-binding --with-xml-support
-      args:
+    # This was four near-identical tasks, one per distribution release, each
+    # hardcoding the Python version that release happened to ship: 3.9 for
+    # Bullseye, 3.10 for Jammy, 3.11 for Bookworm. Trixie ships 3.13 and
+    # matched none of them, so ./configure never ran, no Makefile was
+    # generated, and the build failed at "make all". Hamlib underpins most of
+    # HamPi, so that took the whole run down with it.
+    #
+    # Asking the target which Python it actually runs is correct on every
+    # release, including ones that do not exist yet.
+    - name: Configure Hamlib
+      ansible.builtin.command:
+        cmd: >-
+          ./configure
+          PYTHON_VERSION={{ ansible_python_version.split('.')[0:2] | join('.') }}
+          --with-python-binding
+          --with-xml-support
         chdir: /home/{{ ham_user }}/hamradio/hamlib
-      when: is_buster|bool and not is_jammy|bool
-
-    - name: Configure Hamlib (Bullseye)
-      command: ./configure PYTHON_VERSION='3.9' --with-python-binding --with-xml-support
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/hamlib
-      when: is_bullseye|bool or is_iq|bool and not is_buster|bool and not is_jammy|bool
-
-    - name: Configure Hamlib (Bookworm)
-      command: ./configure PYTHON_VERSION='3.11' --with-python-binding --with-xml-support
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/hamlib
-      when: is_bookworm|bool
-
-    - name: Configure Hamlib (Jammy)
-      command: ./configure PYTHON_VERSION='3.10' --with-python-binding --with-xml-support
-      args:
-        chdir: /home/{{ ham_user }}/hamradio/hamlib
-      when: is_jammy|bool
 
     - name: Build Hamlib
       command: make all

@@ -62,6 +62,7 @@
         is_bookworm: false
         is_trixie: false
         is_forky: false
+        is_bookworm_or_newer: false
         # Ubuntu releases
         is_impish: false
         is_jammy: false
@@ -175,6 +176,13 @@
         is_resolute: true
         is_trixie: true
       when: is_ubuntu | bool and ansible_distribution_release == 'resolute'
+
+    # Most release-conditional tasks really mean "Bookworm or anything after
+    # it" -- PEP 668 applies, Qt 5 moved, and so on. Deriving that once here
+    # keeps those tasks from having to name every future release.
+    - name: Set derived release facts
+      ansible.builtin.set_fact:
+        is_bookworm_or_newer: "{{ is_bookworm | bool or is_trixie | bool or is_forky | bool }}"
 
     - name: Set facts for Raspberry Pi hardware
       ansible.builtin.set_fact:

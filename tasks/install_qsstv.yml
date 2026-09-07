@@ -47,7 +47,7 @@
     register: result
     until: result.failed == false
 
-  - name: Install dependent libraries (Raspberry Pi Bookworm)
+  - name: Install dependent libraries (Raspberry Pi, Bookworm and later)
     become: yes
     package:
       name: "{{ item }}"
@@ -55,7 +55,7 @@
     with_items:
     - qt5-qmake
     - qtbase5-dev
-    when: is_rpi|bool and is_bookworm|bool
+    when: is_rpi|bool and is_bookworm_or_newer|bool
     retries: 5
     delay: 30
     register: result

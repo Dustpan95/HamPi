@@ -66,12 +66,12 @@
     register: result
     until: result.failed == false
 
-  - name: Install dependent libraries (ARM Bookworm)
+  - name: Install dependent libraries (ARM, Bookworm and later)
     become: yes
     package:
       name: libqcustomplot2.1
       state: present
-    when: is_arm|bool and is_bookworm|bool
+    when: is_arm|bool and is_bookworm_or_newer|bool
     retries: 5
     delay: 30
     register: result
