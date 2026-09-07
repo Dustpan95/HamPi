@@ -44,21 +44,40 @@
           Exactly one of is_rpi / is_pc / is_iq must be true, but got
           is_rpi={{ is_rpi }} is_pc={{ is_pc }} is_iq={{ is_iq }}.
 
-    - name: Assert the compile-time variables survive a standalone run
-      # Regression guard. shackwright_make_jobs was originally defined in
-      # default/main.yml, which only init_task.yml loads. Every playbook that
-      # compiles references it in its `environment:` keyword, so running any
-      # of them on their own failed the play before its first task with
-      # "'shackwright_make_jobs' is undefined". An arm64 trial build caught
-      # it; this catches it next time.
+    - name: Assert the configuration variables survive a standalone run
+      # Regression guard for a whole class of bug, not one variable.
+      #
+      # These live in default/, which init_task.yml loads. main.yml runs
+      # init_task early so a full run was fine, but every other entry point --
+      # running one playbook to debug one application, or a CI trial build --
+      # skips it. ham_user alone is referenced 933 times, and an undefined
+      # value fails the play before its first task.
+      #
+      # Two of these were found exactly that way by arm64 trial builds:
+      # shackwright_make_jobs, then pip_system_extra_args. set_facts.yml now
+      # loads the variable files so every path has them.
       ansible.builtin.assert:
         that:
-          - shackwright_make_jobs is defined
+          - item in hostvars[inventory_hostname]
+        fail_msg: >-
+          '{{ item }}' is undefined after set_facts.yml. Any playbook
+          referencing it fails before its first task when run on its own.
+      loop:
+        - ham_user
+        - wallpaper_prefix
+        - shackwright_make_jobs
+        - pip_system_extra_args
+        - build_swap_size_mb
+        - swap_ram_threshold_mb
+        - wsjtx_version
+        - sdrplay3_arm_version
+        - sdrplay3_x86_version
+
+    - name: Assert the job count is sane for this host
+      ansible.builtin.assert:
+        that:
           - shackwright_make_jobs | int >= 1
           - shackwright_make_jobs | int <= (ansible_processor_vcpus | int)
-        fail_msg: >-
-          shackwright_make_jobs is {{ shackwright_make_jobs | default('undefined') }};
-          every compiling playbook fails before its first task.
 
     - name: Assert every platform fact is defined
       # Guards against a regression where a fact is only set inside a `when`,

@@ -218,6 +218,40 @@
         is_hampc: true
       when: not is_rpi | bool and not is_iq | bool
 
+    #
+    # Load the variable files here, not only in init_task.yml.
+    #
+    # These were previously loaded by init_task.yml alone, which main.yml runs
+    # early, so a full run was fine. But every other entry point -- running one
+    # playbook to debug one application, or a CI trial build -- skips
+    # init_task, leaving ham_user (933 references), pip_system_extra_args (16),
+    # wallpaper_prefix (84) and the version pins undefined, and the play fails
+    # before its first task.
+    #
+    # set_facts.yml is the one file every path runs, so the defaults belong
+    # here too. init_task.yml still loads them; include_vars is idempotent, and
+    # leaving it means nothing depending on it changes behaviour. Extra vars
+    # passed with -e still override both.
+    #
+    - name: Load global defaults
+      ansible.builtin.include_vars:
+        file: ../default/main.yml
+
+    - name: Load Raspberry Pi OS defaults
+      ansible.builtin.include_vars:
+        file: ../default/raspbianos.yml
+      when: is_rpi | bool
+
+    - name: Load Inovato Quadra defaults
+      ansible.builtin.include_vars:
+        file: ../default/inovato.yml
+      when: is_iq | bool
+
+    - name: Load PC defaults
+      ansible.builtin.include_vars:
+        file: ../default/xubuntu.yml
+      when: is_pc | bool
+
     - name: Report detected platform
       ansible.builtin.debug:
         msg: >-
