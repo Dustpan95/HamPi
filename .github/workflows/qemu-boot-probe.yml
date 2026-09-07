@@ -31,7 +31,7 @@ on:
       seconds:
         description: 'Seconds to let each configuration run'
         required: false
-        default: '240'
+        default: '600'
 
 permissions:
   contents: read
@@ -100,7 +100,7 @@ jobs:
 
       - name: Boot the stock image under each configuration
         env:
-          SECS: ${{ inputs.seconds || '240' }}
+          SECS: ${{ inputs.seconds || '600' }}
         run: |
           mkdir -p probe
 
@@ -146,55 +146,38 @@ jobs:
             fi
           }
 
-          # 1. The Pi 3 B device tree, matching the raspi3b machine exactly.
-          if [ -f fw/bcm2710-rpi-3-b.dtb ]; then
-            run_config rpi3b-dtb-3b \
-              -M raspi3b -kernel fw/kernel8.img -dtb fw/bcm2710-rpi-3-b.dtb \
-              -drive file=stock.img,format=raw,if=sd \
-              -append "${common_append} root=/dev/mmcblk0p2"
-          fi
+          # Round 1 established the working shape and is not repeated:
+          #
+          #   * the console is on the SECOND -serial, not the first. Every
+          #     raspi3b configuration wrote 19-21 KB to uart1 and exactly zero
+          #     bytes to uart0. A harness passing a single -serial records the
+          #     wrong port and sees nothing at all.
+          #   * raspi3b with bcm2710-rpi-3-b.dtb mounts ext4 from mmcblk0p2,
+          #     runs /sbin/init and starts systemd 257.13.
+          #   * passing -initrd initramfs8 breaks it. That configuration
+          #     panicked with "Attempted to kill init!". Do not pass one.
+          #
+          # What it did not do is finish. The log stops dead after
+          #
+          #     systemd[1]: Detected first boot.
+          #     systemd[1]: Initializing machine ID from random generator.
+          #
+          # and emits nothing for the remaining 228 seconds. The likely reason
+          # is systemd-firstboot, which on a first boot with nothing preset
+          # prompts on the console for locale, timezone and a root password.
+          # Our console is a file, so no answer can ever arrive and it waits
+          # forever. That is a property of booting an unconfigured image
+          # headless, not a fault in the image.
+          #
+          # This round tests that explanation. If systemd.firstboot=off gets
+          # the boot to a login prompt, the hypothesis is right and the image
+          # build can adopt this configuration.
 
-          # 2. The B+ device tree, which is what the failed run used.
-          if [ -f fw/bcm2710-rpi-3-b-plus.dtb ]; then
-            run_config rpi3b-dtb-3bplus \
-              -M raspi3b -kernel fw/kernel8.img \
-              -dtb fw/bcm2710-rpi-3-b-plus.dtb \
-              -drive file=stock.img,format=raw,if=sd \
-              -append "${common_append} root=/dev/mmcblk0p2"
-          fi
-
-          # 3. With the image's own initramfs, if it ships one. Raspberry Pi OS
-          #    builds its initramfs at first boot on some releases, so it may
-          #    not be there at all.
-          if [ -f fw/initramfs8 ] && [ -f fw/bcm2710-rpi-3-b.dtb ]; then
-            run_config rpi3b-initramfs \
-              -M raspi3b -kernel fw/kernel8.img -dtb fw/bcm2710-rpi-3-b.dtb \
-              -initrd fw/initramfs8 \
-              -drive file=stock.img,format=raw,if=sd \
-              -append "${common_append} root=/dev/mmcblk0p2"
-          fi
-
-          # 4. No root at all. If the kernel prints its banner and then panics
-          #    for want of a root filesystem, the console works and the earlier
-          #    silence was a storage problem. If it prints nothing even here,
-          #    nothing is executing and the fault is upstream of Linux.
-          if [ -f fw/bcm2710-rpi-3-b.dtb ]; then
-            run_config rpi3b-no-root \
-              -M raspi3b -kernel fw/kernel8.img -dtb fw/bcm2710-rpi-3-b.dtb \
-              -append "earlycon console=ttyAMA0,115200 console=ttyS0,115200 \
-              panic=5"
-          fi
-
-          # 5. The generic virt machine with virtio storage. Not a Pi, and the
-          #    Raspberry Pi kernel may lack the drivers, but if it works it is
-          #    a far better test target than raspi3b: more memory, more cores,
-          #    and no fixed 1 GiB ceiling.
-          run_config virt-virtio \
-            -M virt -cpu cortex-a72 -smp 4 -m 2048 \
-            -kernel fw/kernel8.img \
-            -drive file=stock.img,format=raw,if=none,id=hd0 \
-            -device virtio-blk-device,drive=hd0 \
-            -append "${common_append} root=/dev/vda2"
+          run_config firstboot-off \
+            -M raspi3b -kernel fw/kernel8.img -dtb fw/bcm2710-rpi-3-b.dtb \
+            -drive file=stock.img,format=raw,if=sd \
+            -append "${common_append} root=/dev/mmcblk0p2 \
+            systemd.firstboot=off systemd.unit=multi-user.target"
 
           echo
           echo "=================================================="
