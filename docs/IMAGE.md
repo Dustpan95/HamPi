@@ -153,5 +153,4 @@ today:
 
 A reduced profile — a smaller application set aimed at the digital modes — may
 well fit inside those limits, and is the obvious first target for automation
-once a manual build has been proven. The `dietpi/` tree is already exploring
-image work along those lines.
+once a manual build has been proven.

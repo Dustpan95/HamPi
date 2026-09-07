@@ -30,7 +30,7 @@ the contributors listed above.
 ##### Maintenance
 
 + W0BTE ([Dustpan95](https://github.com/Dustpan95)) - Shackwright: bringing the
-  project up to date from 2026, and the DietPi installer
+  project up to date from 2026
 
 Maintenance is listed separately because it is a different job from the one
 above. The application selection, the build logic and the design of this

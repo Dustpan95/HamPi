@@ -1,2 +1,0 @@
-# Validation uses the Ansible 2.19 line; the controller needs Python 3.11+.
-ansible-core>=2.19,<2.20
