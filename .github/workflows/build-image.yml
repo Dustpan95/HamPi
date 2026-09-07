@@ -214,6 +214,23 @@ jobs:
             2>&1 | tee ansible-output/install_user_skeleton.log
           exit ${PIPESTATUS[0]}
 
+      - name: Remove the build scaffolding
+        # policy-rc.d stops package maintainer scripts starting services
+        # inside the chroot. It is a build-time device and the finalize step
+        # already deletes it, so the shipped image never carried it -- but
+        # finalize runs AFTER the manifest is taken, so build 9's manifest
+        # listed /usr/sbin/policy-rc.d as if it were part of the image.
+        #
+        # A manifest that describes a state which never ships is the same
+        # class of problem as every other one found today: plausible, and
+        # wrong. Taking the scaffolding down before the inventory rather than
+        # after it costs nothing and makes the manifest true.
+        #
+        # Safe here because no package installs happen after this point; the
+        # only remaining steps read.
+        run: |
+          sudo rm -f "$MNT/usr/sbin/policy-rc.d"
+
       - name: Record what is in the image
         # Anyone who flashes a card is entitled to know what is on it. Until
         # now a release said only "untested image build N", which gives the
@@ -333,6 +350,9 @@ jobs:
         if: always()
         run: |
           set -x
+          # policy-rc.d is removed earlier, before the manifest is taken, so
+          # the manifest reflects the shipped image. This is belt and braces
+          # in case that step was skipped.
           sudo rm -f "$MNT/usr/sbin/policy-rc.d"
           if [ -f "$MNT/etc/ld.so.preload.disabled" ]; then
             sudo mv "$MNT/etc/ld.so.preload.disabled" "$MNT/etc/ld.so.preload"
