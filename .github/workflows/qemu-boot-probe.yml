@@ -107,8 +107,17 @@ jobs:
           # Every configuration captures both UARTs and names both consoles on
           # the kernel command line, so console routing cannot be the reason a
           # configuration looks dead.
+          # Order matters and cost a round to work out. The kernel prints
+          # to every console= it is given, but /dev/console -- the one
+          # userspace and systemd actually write to -- is the LAST one
+          # listed. Round one had ttyS0 last, and on QEMU's raspi3b ttyS0 is
+          # the mini UART, which the Raspberry Pi device tree leaves
+          # unconfigured. Everything the kernel printed still arrived,
+          # because printk goes to all of them, so the log looked healthy;
+          # everything systemd printed went into a port that does not exist.
+          # ttyAMA0 goes last now.
           common_append="rw rootwait earlycon loglevel=8 \
-          console=ttyAMA0,115200 console=ttyS0,115200"
+          console=ttyS0,115200 console=ttyAMA0,115200"
 
           run_config() {
             name="$1"; shift
@@ -122,7 +131,7 @@ jobs:
             timeout "$SECS" qemu-system-aarch64 \
               -serial "file:probe/${name}.uart0" \
               -serial "file:probe/${name}.uart1" \
-              -display none -no-reboot \
+              -display none \
               "$@" > "probe/${name}.stdout" 2>&1
             rc=$?
             set -e
@@ -173,7 +182,17 @@ jobs:
           # the boot to a login prompt, the hypothesis is right and the image
           # build can adopt this configuration.
 
-          run_config firstboot-off \
+          # Round two: systemd.firstboot=off turned a 240 second hang into a
+          # 14 second exit, which is what confirmed the hang was
+          # systemd-firstboot prompting on a console nobody could answer.
+          # But QEMU exited on its own well before the time limit, and with
+          # -no-reboot that means the guest asked to reset. Nothing in the
+          # log says why, because the reason would have gone to /dev/console.
+          #
+          # This round fixes the console ordering so systemd's own output is
+          # captured, and drops -no-reboot so a reset is survivable rather
+          # than fatal to the test.
+          run_config console-fixed \
             -M raspi3b -kernel fw/kernel8.img -dtb fw/bcm2710-rpi-3-b.dtb \
             -drive file=stock.img,format=raw,if=sd \
             -append "${common_append} root=/dev/mmcblk0p2 \
