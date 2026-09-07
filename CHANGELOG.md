@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+Continuation of the project after upstream's last release in April 2024.
+Target platform moves from Raspberry Pi OS Bookworm to Raspberry Pi OS
+Trixie (Debian 13). Not yet verified by an end-to-end build on hardware.
+
+### Added
+- Debian 13 (Trixie) and Debian 14 (Forky) support.
+- Ubuntu 24.04 (Noble) and 26.04 (Resolute) support, each mapped onto the
+  Debian release it forked from.
+- Raspberry Pi 4 / 400 / 5 / 500 and Pi Zero model detection.
+- Continuous integration: yamllint, ansible-lint, a syntax check of every
+  playbook, and unit tests for platform detection.
+- `tests/`, exercising platform detection against recorded device tree
+  fixtures so board and OS detection is verifiable without a Pi attached.
+- `tools/list_apt_packages.py`, listing every Debian package the playbooks
+  install and flagging version-pinned names that break across releases.
+- `requirements.txt` for control-node tooling.
+- `hosts.example`, documenting SSH keys and Ansible Vault.
+
+### Fixed
+- `is_arm_64` was true for 32-bit armhf and armv7l as well as aarch64,
+  making every `is_arm and not is_arm_64` branch unreachable. GridTracker,
+  SKCCLogger, PMON and the antenna modeling apps all select their 32-bit ARM
+  downloads that way.
+- Word size is now taken from the userland rather than the kernel, so a
+  64-bit kernel with a 32-bit userland gets armhf binaries as it should.
+- Distribution detection no longer requires `lsb_release`, whose absence
+  aborted the run before anything was built.
+- Raspberry Pi detection reads `/proc/device-tree/model` instead of matching
+  the distribution ID, which also matched any generic Debian PC.
+- Hamlib configured with a Python version hardcoded per release, so Trixie
+  matched no branch, `./configure` never ran and the build failed at
+  `make all`. It now asks the target which Python it runs.
+- Hamlib did not install `python3-dev` on Bookworm or Trixie while still
+  building `--with-python-binding`.
+- qdmr pinned yaml-cpp by soname and could not resolve it on Trixie; it now
+  installs `libyaml-cpp-dev`.
+- `run_HamPi_playbook` returned tee's exit status, reporting success for
+  failed builds; it never created its log directory; and it invoked a
+  `notify_via_email.py` that is in no one's checkout.
+- `scan_build_log_for_application_versions` hardcoded the original
+  maintainer's LAN address, so its filter did nothing for anyone else.
+- Quoted 22 implicit octal file modes.
+
+### Changed
+- Python packages install via the `pip` module rather than `command`, so
+  re-runs no longer reinstall everything. The PEP 668 override is now one
+  documented variable instead of sixteen copies of a bare flag.
+- `hosts` no longer ships with working passwords for four host groups; it is
+  git-ignored and generated from `hosts.example`.
+- Minimum ansible-core raised from 2.12 to 2.16.
+
+### Removed
+- `library/default.yml`: three bytes of `--`, referenced nowhere.
+- Four redundant Hamlib dependency blocks, subsumed by the common list.
+
 ## [3.3 32-bit] - 2023-03-30
 - Updated copyright year to 2023
 - Switched license to GPL 3.0.

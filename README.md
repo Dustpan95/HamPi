@@ -1,258 +1,210 @@
-# HamPi, formerly known as W3DJS Raspberry Pi for Ham Radio
-HamPi, formerly known as W3DJS Raspberry Pi for Ham Radio
+# HamPi
 
-# Documentation
-There is a comprehensive Wiki for HamPi, located here: [https://github.com/dslotter/HamPi/wiki](../../wiki)
+HamPi builds a complete amateur radio software environment on a Raspberry Pi,
+an x86_64 Linux PC (as **HamPC**), or an Inovato Quadra (as **HamIQ**). It is an
+Ansible playbook, not an image: it takes a stock operating system install and
+adds a hundred-odd ham radio applications, their dependencies, desktop menu
+entries and configuration.
 
-# Past Version
-Version 2 of Raspberry Pi Ham Radio Image by W3DJS
+Originally created by **Dave Slotter, W3DJS**. This repository continues the
+project, which had its last upstream release in April 2024.
 
-**General Ham Radio Applications**
+---
 
-  HamLib - Ham Radio Control Libraries
-  
-  grig - graphical user interface to the Ham Radio Control Libraries
-  
-  CHIRP - Radio Programming Software
-  
-  APRS Message App for JS8Call - GUI to send APRS messages via JS8Call
-  
-  QTel - EchoLink client
-  
-  QSSTV - Slow Scan TV (e.g. "Fax")
-  
-  Gpredict - Satellite prediction
-  
-  FreeDV - Free digital voice vocoder
-  
-  BlueDV - Client for D-Star and DMR
-  
-  WsprryPi - WSPR software
-  
-  ADS-B Flight Tracking Software
-  
-  Pi3/4 Stats Monitor - by W1HKJ
-  
-  VOACAP - HF propagation prediction
-  
-  GPS Support
-  
-  Auto WiFi Hotspot - Automatically turn your Pi into a WiFi hotspot when in the field!
-  
-  wxtoimg - NOAA weather imaging software
-  
-  twHamQTH - an online callsign look up program
-  
-  twclock - a world clock and automatic ID for amateur radio operators
-  
-  acfax - Receive faxes using your radio and sound card
-  
-  colrconv - convers client with sound and ncurses color support
-  
-  d-rats - A communication tool for D-STAR
-  
-  fbb - Packet radio mailbox and utilities
-  
-  gcb - Utility to calculate long and short path to a location
-  
-  glfer - Spectrogram display and QRSS keyer
-  
-  Xdx is a DX-cluster client
-  
-  DXSpider - DX Cluster Server
-  
-  fccexam - Study tool for USA FCC commercial radio license exams.
-  
-  gnuais / gnuaisgui - GNU Automatic Identification System receiver
-  
-  hamexam - Study guide for USA FCC amateur radio (ham radio) license examinations.
-  
-  hamfax - Qt based shortwave fax
-  
-  inspectrum - tool for visualising captured radio signals
-  
-  predict-gsat - Graphical Predict client
-  
-  splat - analyze point-to-point terrestrial RF communication links
-  
-  wwl - Calculates distance and azimuth between two Maidenhead locators
+## Status
 
-**Antenna Ham Radio Applications**
+**Modernization in progress. Not yet verified on hardware.**
 
-  antennavis - Antenna Visualization Software
-  
-  gsmc - A GTK Smith Chart Calculator for RF impedance matching
-  
-  nec2c - Translation of the NEC2 FORTRAN source code to the C language
-  
-  xnecview - NEC structure and gain pattern viewer
-  
-  yagiuda - software to analyse performance of Yagi-Uda antennas
+Upstream targeted Raspberry Pi OS Bookworm and stopped there. Raspberry Pi OS
+moved to Debian 13 "Trixie" in October 2025, and a great deal of this tree
+assumed the older release. Work so far has been to make the playbooks correct
+for current hardware and current Raspberry Pi OS, and to put automated checks
+in place so it does not silently rot again.
 
+What has been done and verified automatically:
 
-**Digital Mode Ham Radio Applications**
-  WSJT-X - Weak Signal (FT8, FT4, etc.) by W1JT
-  
-  GridTracker - Graphical mapping companion program for WSJT-X or JTDX
-  
-  JTDX - Alternate client for Weak Signal (FT8, FT4, etc.)
-  
-  JS8Call - Messaging built on top of FT8 protocol by KN4CRD
-  
-  JS8CallTools - Get Grid coordinates using GPS
-  
-  (FLDigi is in its own section below.)
-  
-  gnss-sdr - GLONASS satellite system Software Defined Receiver
-  
-  linpsk - amateur radio PSK31/RTTY program via soundcard
-  
-  multimon - multimon - program to decode radio transmissions
-  
-  multimon-ng - digital radio transmission decoder
-  
-  psk31lx - a terminal based ncurses program for psk31
-  
-  twpsk - a psk program
+| Area | State |
+|------|-------|
+| Platform detection (OS, CPU, board) | Rewritten, unit tested |
+| Debian 13 Trixie / Debian 14 Forky | Supported |
+| Ubuntu 24.04 Noble / 26.04 Resolute | Supported |
+| Raspberry Pi 5 / 500 detection | Added |
+| Playbook syntax, all 130 playbooks | Passing in CI |
+| ansible-lint (production profile) | Clean |
+| Hamlib build on Trixie | Fixed (needs a hardware run) |
 
-**Software Defined Radio**
+What has **not** been done: a full build on a real Raspberry Pi. Every change so
+far is verified by syntax checks, linting and unit tests, which catch a large
+class of defects but cannot tell you whether a package still compiles. The
+first end-to-end run on real hardware is the next milestone, and it will find
+things. See [Known issues](#known-issues).
 
-  CubicSDR - Software Defined Radio receiver
-  
-  cutesdr - Simple demodulation and spectrum display program
-  
-  GQRX - Software defined radio receiver
-  
-  SDRAngel - SDR player
-  
-  lysdr - Simple software-defined radio
-  
-  quisk - Software Defined Radio (SDR)
-  
-  SoapyAudio - Soapy SDR plugin for Audio devices
-  
-  SoapyHackRF - SoapySDR HackRF module
-  
-  SoapyMultiSDR - Multi-device support module for SoapySDR
-  
-  SoapyNetSDR - Soapy SDR module for NetSDR protocol
-  
-  SoapyRemote - Use any Soapy SDR remotely
-  
-  SoapyRTLSDR - Soapy SDR module for RTL SDR USB dongle
-  
-  SoapySDR - Vendor and platform neutral SDR support library
-  
-  SoapySDRPlay - Soapy SDR module for SDRPlay
-  
-  Support for RTL-SDR
-  
-  Support for SDRPlay SDR
-  
-  Support for HackRF SDR
+---
 
-**APRS Applications**
+## Requirements
 
-  Xastir - APRS GUI client / Digipeater / Igate
-  
-  YAAC - Yet Another APRS Client
-  
-  DireWolf - Software "soundcard" AX.25 packet modem/TNC and APRS encoder/decoder
-  
-  aprsdigi - digipeater for APRS
-  
-  aprx - APRS Digipeater and iGate
-  
-  soundmodem - Sound Card Amateur Packet Radio Modems
+* A target machine running **Raspberry Pi OS Trixie (64-bit)**, Debian 13, or
+  Ubuntu 24.04 / 26.04. Raspberry Pi 4, 5, 400 or 500 recommended.
+* A **32 GB or larger** SD card or SSD. The full install no longer fits on 16 GB.
+* SSH access to the target from the machine you run the playbook on.
+* `ansible-core` 2.16 or newer on the machine running the playbook.
 
-**FLDigi Application Suite from W1HKJ**
-  flrig - Rig Control program which interfaces with fldigi
-  
-  fldigi - Digital Modes Communications
-  
-  flaa - RigExpert Antenna Analyzer Control Program
-  
-  flamp - File transmissions via Amateur Multicast Protocol
-  
-  flarq - ARQ data transfer utility for fldigi
-  
-  flcluster - Telnet client to remote DX Cluster Servers
-  
-  fllog - Logbook application which can use same data file as fldigi
-  
-  flmsg - Editor for ICS 213 Forms
-  
-  flnet - Net Control Assistant for Net Activities (Check-In Application)
-  
-  flpost - NBEMs post office
-  
-  flwrap - File encapsulation and compression for transmission over amateur radio
-  
-  flwkey - Winkeyer (or clone) control program for K1EL Winkeyer series
+Raspberry Pi OS Trixie still ships a 32-bit edition, but 64-bit is strongly
+recommended. On 32-bit ARM several libraries changed ABI in the move to 64-bit
+`time_t` without changing their names, so a binary built against Bookworm
+libraries can link against Trixie libraries that look compatible and are not.
 
-**Logging Applications**
+---
 
-  TrustedQSL - LotW client
-  
-  CQRlog - Ham Radio Logging Application
-  
-  PyQSO - Logging software (written in Python)
-  
-  KLog - The Ham Radio Logging program
-  
-  tlf - console based ham radio contest logger
-  
-  tucnak2 - VHF/UHF/SHF Hamradio contest log version 2
-  
-  twlog - basic logging program for ham radio
-  
-  wsjtx_to_n3fjp - Logging adapter to allow WSJT-X to log to N3FJP
-  
-  xlog - GTK+ Logging program for Hamradio Operators
+## Quick start
 
-**WinLink Applications**
+Run the playbook from a PC or a second Pi, against the machine you are building.
 
-Pat WinLink - WinLink for Raspberry Pi (and other platforms)
+```bash
+git clone https://github.com/Dustpan95/HamPi.git
+cd HamPi
 
-  ARDOP support for Pat WinLink
+# Control-node tooling. Debian and Ubuntu mark their system Python as
+# externally managed, so use a virtual environment.
+python3 -m venv ~/.venv/hampi
+~/.venv/hampi/bin/pip install -r requirements.txt
+. ~/.venv/hampi/bin/activate
 
-  ARDOP-GUI - Provides graphical representation of ARDOP connections
+# Set up key-based SSH to the target, then describe it to Ansible.
+ssh-copy-id <user>@hampi.local
+cp hosts.example hosts
+$EDITOR hosts
 
-  Find ARDOP - Retrieves local ARDOP sources by KM4ACK
+./run_HamPi_playbook
+```
 
-  AX25 support for Pat WinLink
+`hosts` is git-ignored, so your inventory survives updates and your credentials
+are never committed. The runner prompts for the target's sudo password rather
+than storing it.
 
-  PMON - a PACTOR® Monitoring Utility for Linux
+Expect the full build to take **several hours** — most of it is compiling from
+source. Output is logged to `ansible-output/`.
 
-**Morse Code Applications**
+Any extra arguments are passed straight through to `ansible-playbook`:
 
-  aldo - Morse code training program
+```bash
+./run_HamPi_playbook --limit hampi.local     # one host
+./run_HamPi_playbook --check                 # dry run
+```
 
-  cw - sound characters as Morse code on the soundcard or console speaker
+---
 
-  cwcp - Text based Morse tutor program
+## Known issues
 
-  xcwcp - Graphical Morse tutor program
+These are recorded rather than fixed because confirming them needs a real
+build. Help with any of them is welcome.
 
-  cwdaemon - morse daemon for the serial or parallel port
+**34 applications are disabled.** `tasks/main.yml` has 34 commented-out imports,
+most marked "broken under Bookworm" by upstream — including SDRAngel, GQRX,
+CubicSDR, FreeDV, dump1090, TQSL, most of the SoapySDR driver modules, and the
+DRAWS hat support. Each needs to be tried against Trixie and either repaired or
+retired. They all still pass a syntax check, so re-enabling one is a one-line
+change.
 
-  ebook2cw - convert ebooks to Morse MP3s/OGGs
+**Eleven enabled playbooks install dependencies only for old releases.** They
+branch on Buster, Bullseye or Jammy and match nothing on Trixie, so the task
+skips, Ansible reports success, and the application is built without its
+dependencies:
 
-  ebook2cwgui - GUI for ebook2cw
+`install_bluedv` · `install_gridtracker` · `install_logging_apps` ·
+`install_miscellaneous_apps` · `install_antenna_modeling_apps` ·
+`install_cmake` · `install_cygnusRFI` · `install_digital_apps` ·
+`install_jtdx` · `install_tapr_wspr` · `install_morsecode_apps`
 
-  morse - training program about morse-code for aspiring radio hams
+**Version-pinned package names.** Around 30 dependencies name a specific shared
+library soname (`libgfortran4`, `libgnuradio-osmosdr0.2`, `libqcustomplot2.0`).
+Those names change with each Debian release. `tools/list_apt_packages.py
+--suspicious` lists them; run it against a Trixie target to find which no longer
+resolve.
 
-  morse2ascii - tool for decoding the morse codes from a PCM WAV file
+**A branch that can never run.** `install_jtdx.yml` guards a dependency install
+with `is_rpi and is_bullseye and not is_arm`. A Raspberry Pi is always ARM, so
+that task has never executed.
 
-  morsegen - convert file to ASCII morse code
+**Python packages install into the system interpreter.** Sixteen applications
+are installed with pip's `--break-system-packages` override, centralized in
+`default/main.yml`. The cleaner fix is a dedicated virtual environment with the
+desktop launchers pointing at it; that changes where every one of those programs
+lives, so it needs hardware testing first.
 
-  qrq - High speed Morse telegraphy trainer
+---
 
-  twcw - sends morse code via the sound card or serial card (Needs RTC installed)
+## Development
 
-  xdemorse - decode Morse signals to text
+CI runs on every push and pull request. To run the same checks locally:
 
-  rscw - Receive CW through Soundcard
+```bash
+yamllint .                                              # style and real defects
+ansible-lint                                            # Ansible correctness
+ansible-playbook -i 'localhost,' --syntax-check tasks/main.yml
+./tests/run_tests.sh                                    # platform detection
+```
 
+`tests/` exercises platform detection against recorded `/proc/device-tree/model`
+fixtures, so board and OS detection can be verified on any machine without a Pi
+attached. If you change `library/set_facts.yml`, add a case there.
 
-*** Ham Radio Wallpaper also included in image ***
+A note on layout, which predates current Ansible conventions: files in `tasks/`
+are complete playbooks with their own `hosts:` key, not task lists, and
+`library/` holds playbooks rather than custom modules. `.ansible-lint` maps the
+real file kinds so the linter does not apply the wrong schema. Renaming those
+directories would break every existing bookmark, wiki page and documented
+command, so the layout stays.
+
+---
+
+## Applications
+
+Well over a hundred, across logging, digital modes, SDR, APRS, satellite work,
+antenna modeling, Morse training and licence study. The full annotated list
+lives in the [upstream wiki](https://github.com/dslotter/HamPi/wiki), which
+remains an accurate description of what the playbooks install.
+
+The broad categories:
+
+* **Rig control and general** — Hamlib, grig, CHIRP, Gpredict, VOACAP, HamClock
+* **FLDigi suite (W1HKJ)** — fldigi, flrig, flmsg, flamp, flnet, fllog, and the rest
+* **Digital modes** — WSJT-X, JTDX, JS8Call, MSHV, GridTracker, QSSTV, fldigi
+* **SDR** — SoapySDR and its driver modules, CubicSDR, GQRX, SDRAngel, quisk, OpenWebRX
+* **APRS and packet** — Xastir, YAAC, DireWolf, aprx, AX.25 tooling, LinPac
+* **Logging** — CQRlog, KLog, PyQSO, TrustedQSL, tlf, xlog
+* **WinLink** — Pat, ARDOP, PMON
+* **Morse** — aldo, cwcp, qrq, ebook2cw, morse2ascii
+* **Antennas** — nec2c, xnecview, yagiuda, gsmc, antennavis, Fl_MoxGen
+
+---
+
+## Contributing
+
+Issues and pull requests are welcome, particularly from anyone able to test on
+real hardware. The most useful contributions right now:
+
+1. **Run a full build on Trixie and report what breaks.** Attach the log from
+   `ansible-output/`.
+2. **Repair a disabled application.** Pick one of the 34, get it building on
+   Trixie, re-enable its import in `tasks/main.yml`.
+3. **Confirm package availability** on Trixie with `tools/list_apt_packages.py`.
+
+Please keep CI green: run the four commands under [Development](#development)
+before opening a pull request.
+
+---
+
+## Credits
+
+HamPi was created and maintained for six years by **Dave Slotter, W3DJS**, with
+contributions from many others — see [CONTRIBUTORS.md](CONTRIBUTORS.md). This
+repository carries that work forward; the architecture, the application
+selection and the overwhelming majority of the code are his and theirs.
+
+## License
+
+GNU General Public License v3.0. See [LICENSE](LICENSE).
+
+Copyright 2020 - 2024, Dave Slotter (W3DJS).
+Copyright 2024 - 2026, HamPi contributors.

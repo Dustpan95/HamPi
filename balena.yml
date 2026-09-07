@@ -8,11 +8,11 @@ assets:
   repository:
     type: blob.asset
     data:
-      url: 'https://github.com/dslotter/hampi'
+      url: 'https://github.com/Dustpan95/HamPi'
   logo:
     type: blob.asset
     data:
-      url: 'https://raw.githubusercontent.com/dslotter/hampi/master/HamPi_Logo.png'
+      url: 'https://raw.githubusercontent.com/Dustpan95/HamPi/master/HamPi_Logo.png'
 data:
   defaultDeviceType: raspberrypi4
   supportedDeviceTypes:

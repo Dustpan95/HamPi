@@ -17,4 +17,13 @@
 
 ##### THANK YOU TO ALL HAMPI / HAMPC CONTRIBUTORS!
 
-###### Please send additions/corrections to [hampi@slotter.net](mailto:hampi@slotter.net)
+---
+
+HamPi was created and maintained by Dave Slotter, W3DJS, from 2020 through
+its last upstream release in April 2024. The architecture, the application
+selection and the overwhelming majority of this code are the work of him and
+the contributors listed above.
+
+This repository continues the project. Additions and corrections to this
+list are welcome by pull request or issue:
+<https://github.com/Dustpan95/HamPi/issues>

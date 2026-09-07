@@ -16,58 +16,6 @@
         path: /home/{{ ham_user }}/hamradio
         state: directory
 
-    - name: Install dependent libraries (Raspberry Pi Buster)
-      become: yes
-      package:
-        name: "{{ item }}"
-        state: present
-      with_items:
-        - python
-        - python-dev
-      when: is_rpi|bool and is_buster|bool
-      retries: 5
-      delay: 30
-      register: result
-
-    - name: Install dependent libraries (Raspberry Pi Bullseye)
-      become: yes
-      package:
-        name: "{{ item }}"
-        state: present
-      with_items:
-        - libnova-dev
-        - libindi-dev
-      when: is_rpi|bool and is_bullseye|bool
-      retries: 5
-      delay: 30
-      register: result
-      until: result.failed == false
-
-    - name: Install dependent libraries (Jammy)
-      become: yes
-      package:
-        name: "{{ item }}"
-        state: present
-      with_items:
-        - python3-dev
-        - libnova-dev
-        - libindi-dev
-      when: is_jammy|bool
-      retries: 5
-      delay: 30
-      register: result
-      until: result.failed == false
-
-    - name: Install dependent libraries (Inovato)
-      become: yes
-      package:
-        name: python3-dev
-        state: present
-      when: is_iq|bool
-      retries: 5
-      delay: 30
-      register: result
-
     - name: Install dependent libraries (Common)
       become: yes
       package:
