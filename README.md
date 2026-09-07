@@ -119,14 +119,36 @@ Any extra arguments are passed straight through to `ansible-playbook`:
 
 ## Known issues
 
-These are recorded rather than fixed because confirming them needs a real
-build. Help with any of them is welcome.
+What is still wrong, and what was wrong badly enough to be worth recording
+after the fact. Most of the open items are recorded rather than fixed because
+confirming them needs a real build. Help with any of them is welcome.
 
-**22 applications are disabled.** `tasks/main.yml` has 22 commented-out
-imports, most marked "broken under Bookworm" by upstream — including SDRAngel,
-GQRX, CubicSDR, FreeDV, dump1090, TQSL, and the DRAWS hat support. Each needs
-to be tried against Trixie and either repaired or retired. They all still pass
-a syntax check, so re-enabling one is a one-line change.
+**Two defects made most of this tree unusable. Both are fixed and guarded.**
+
+Every playbook that passed `warn:` to `command` or `shell` failed outright.
+ansible-core removed that argument in 2.14, released November 2022, and it is
+not ignored — the task dies with *Unsupported parameters*. It appeared 39
+times across 31 files, 27 of them imported by `tasks/main.yml`, so a quarter
+of a full run could not succeed on any Ansible newer than three years old.
+
+Separately, 23 playbooks found "the latest version" by fetching a web page and
+running `grep -Po` over the HTML. When this work started, 21 of the 27
+testable lookups returned an empty string, which was interpolated straight
+into a download URL. One was worse than broken: `install_flnet` matched a
+number out of w1hkj.com's 404 page and reported flnet 7.0.4, a version that
+has never existed. Lookups now use interfaces meant to be parsed — SourceForge
+RSS, the GitHub releases API — and assert on the result before building a URL,
+so a failed lookup stops with an explanation instead of a 404 or a fiction.
+
+`tests/test_removed_ansible_args.sh` runs in CI and fails if either comes
+back.
+
+**17 applications are disabled.** `tasks/main.yml` imports 100 playbooks and
+has 17 commented out, most marked "broken under Bookworm" by upstream —
+including SDRAngel, SDR++, dump1090, rpitx, DroidStar, noaa-apt and the DRAWS
+hat support. Each needs to be tried against Trixie and either repaired or
+retired. They all still pass a syntax check, so re-enabling one is a one-line
+change.
 
 One of them cannot be repaired: `install_twhamqth` fetches from
 `wa0eir.bcts.info`, which no longer exists, and no distribution packages it.
@@ -149,15 +171,15 @@ of compiling with an apt install. Five devices remain unpackaged and still need
 source builds: AirspyHF, FunCube Dongle Pro+, PlutoSDR, VOLK converters, and
 SDRplay, whose API is proprietary.
 
-**Eleven enabled playbooks install dependencies only for old releases.** They
+**Ten enabled playbooks install dependencies only for old releases.** They
 branch on Buster, Bullseye or Jammy and match nothing on Trixie, so the task
 skips, Ansible reports success, and the application is built without its
 dependencies:
 
 `install_bluedv` · `install_gridtracker` · `install_logging_apps` ·
 `install_miscellaneous_apps` · `install_antenna_modeling_apps` ·
-`install_cmake` · `install_cygnusRFI` · `install_digital_apps` ·
-`install_jtdx` · `install_tapr_wspr` · `install_morsecode_apps`
+`install_cygnusRFI` · `install_digital_apps` · `install_jtdx` ·
+`install_tapr_wspr` · `install_morsecode_apps`
 
 **Version-pinned package names.** Around 30 dependencies name a specific shared
 library soname (`libgfortran4`, `libgnuradio-osmosdr0.2`, `libqcustomplot2.0`).
@@ -246,7 +268,7 @@ real hardware. The most useful contributions right now:
 
 1. **Run a full build on Trixie and report what breaks.** Attach the log from
    `ansible-output/`.
-2. **Repair a disabled application.** Pick one of the 34, get it building on
+2. **Repair a disabled application.** Pick one of the 17, get it building on
    Trixie, re-enable its import in `tasks/main.yml`.
 3. **Confirm package availability** on Trixie with `tools/list_apt_packages.py`.
 
