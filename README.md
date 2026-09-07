@@ -81,6 +81,22 @@ things. See [Known issues](#known-issues).
 
 ---
 
+## Flashable image
+
+There is no downloadable image yet. Building one requires a full run on real
+hardware, which has not happened since the project was picked up, and shipping
+an image nobody has booted would only distribute breakage faster.
+
+The process for producing one, and the tooling to package and publish it, are
+in [docs/IMAGE.md](docs/IMAGE.md). `packaging_utilities/package_release.sh`
+compresses, checksums and splits an image into parts under GitHub's 2 GiB
+per-asset limit, and verifies the parts reassemble byte for byte before it will
+finish.
+
+Until then, run the playbook against a fresh Raspberry Pi OS install as below.
+
+---
+
 ## Requirements
 
 * A target machine running **Raspberry Pi OS Trixie (64-bit)**, Debian 13, or
@@ -199,6 +215,7 @@ yamllint .                                              # style and real defects
 ansible-lint                                            # Ansible correctness
 ansible-playbook -i 'localhost,' --syntax-check tasks/main.yml
 ./tests/run_tests.sh                                    # platform detection
+./tests/test_packaging.sh                               # release packaging
 ```
 
 `tests/` exercises platform detection against recorded `/proc/device-tree/model`

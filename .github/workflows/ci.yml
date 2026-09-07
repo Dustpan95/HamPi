@@ -80,7 +80,7 @@ jobs:
           exit $rc
 
   test:
-    name: Platform detection
+    name: Tests
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -95,3 +95,9 @@ jobs:
 
       - name: Run platform detection tests
         run: ./tests/run_tests.sh
+
+      - name: Run release packaging tests
+        # Covers the split-and-reassemble path. A release the downloader
+        # cannot put back together would only fail after several gigabytes
+        # of download, so the round trip is checked on every push.
+        run: ./tests/test_packaging.sh
