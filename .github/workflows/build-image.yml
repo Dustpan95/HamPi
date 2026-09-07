@@ -1,0 +1,244 @@
+---
+name: Build Raspberry Pi image
+
+# Builds a flashable Raspberry Pi OS image on a native arm64 runner.
+#
+# No Raspberry Pi is involved. The official Raspberry Pi OS image is
+# downloaded, grown, loop-mounted, and the playbook is run against it through
+# Ansible's chroot connection. Because the runner is aarch64 and so is the
+# image, this is native execution -- no QEMU, no emulation penalty.
+#
+# Manual only. A job is capped at six hours; the app list is an input so a
+# run can be sized to fit.
+
+on:
+  # Dispatching a workflow needs actions: write, which is not available here,
+  # so a path-filtered push on this file is the only way to start a run. One
+  # run per edit, nothing else.
+  push:
+    branches: [BetaTesting]
+    paths: ['.github/workflows/build-image.yml']
+  workflow_dispatch:
+    inputs:
+      playbooks:
+        description: 'Comma-separated playbooks under tasks/ to install'
+        required: true
+        default: 'install_soapy,install_hamlib'
+      image_size:
+        description: 'Grow the image to this size before installing'
+        required: false
+        default: '16G'
+      base_image:
+        description: 'Base image: raspios_arm64_latest (desktop) or raspios_lite_arm64_latest'
+        required: false
+        default: 'raspios_arm64_latest'
+
+permissions:
+  contents: read
+
+jobs:
+  image:
+    name: Build image on native arm64
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 350
+
+    env:
+      MNT: /mnt/shackwright
+      IMG: shackwright.img
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Report the machine
+        run: |
+          echo "arch: $(uname -m), $(nproc) cores, \
+          $(free -g | awk '/Mem:/{print $2}') GB RAM"
+          df -h / | tail -1
+
+      - name: Reclaim disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost || true
+          sudo rm -rf "$AGENT_TOOLSDIRECTORY" || true
+          df -h / | tail -1
+
+      - name: Install host tooling
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq parted xz-utils e2fsprogs
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - name: Install Ansible and collections
+        run: |
+          python3 -m pip install -r requirements.txt
+          ansible-galaxy collection install -r requirements.yml
+
+      - name: Download the base Raspberry Pi OS image
+        run: |
+          url="https://downloads.raspberrypi.com/${{ inputs.base_image || 'raspios_arm64_latest' }}"
+          echo "Resolving ${url}"
+          curl -fsSIL "$url" | grep -i '^location:' | tail -1
+          curl -fL --retry 3 -o base.img.xz "$url"
+          ls -lh base.img.xz
+          echo "Decompressing ..."
+          xz -d --stdout base.img.xz > "$IMG"
+          rm -f base.img.xz
+          ls -lh "$IMG"
+
+      - name: Grow the image and its root filesystem
+        id: mount
+        run: |
+          set -x
+          # The stock image is sized to its contents; the applications need room.
+          truncate -s "${{ inputs.image_size || '16G' }}" "$IMG"
+          sudo parted -s "$IMG" resizepart 2 100%
+
+          loop=$(sudo losetup -Pf --show "$IMG")
+          echo "loop=$loop" >> "$GITHUB_OUTPUT"
+          sudo e2fsck -pf "${loop}p2" || true
+          sudo resize2fs "${loop}p2"
+
+          sudo mkdir -p "$MNT"
+          sudo mount "${loop}p2" "$MNT"
+          # Trixie puts the firmware partition here; older layouts used /boot.
+          if [ -d "$MNT/boot/firmware" ]; then
+            sudo mount "${loop}p1" "$MNT/boot/firmware"
+          else
+            sudo mount "${loop}p1" "$MNT/boot"
+          fi
+          for d in proc sys dev dev/pts run; do
+            sudo mount --bind "/$d" "$MNT/$d"
+          done
+          df -h "$MNT"
+
+      - name: Prepare the chroot
+        run: |
+          # Raspberry Pi OS preloads libarmmem, which is built for the Pi's
+          # own memory layout and makes every command in the chroot fail on
+          # any other machine. pi-gen does exactly this.
+          if [ -f "$MNT/etc/ld.so.preload" ]; then
+            sudo mv "$MNT/etc/ld.so.preload" "$MNT/etc/ld.so.preload.disabled"
+          fi
+
+          # Stop packages starting services inside the chroot.
+          printf '#!/bin/sh\nexit 101\n' | sudo tee "$MNT/usr/sbin/policy-rc.d" >/dev/null
+          sudo chmod +x "$MNT/usr/sbin/policy-rc.d"
+
+          # Platform detection reads /proc/device-tree/model, and /proc here is
+          # the runner's, which has no device tree. Give it the fixture hook
+          # that library/set_facts.yml already supports, so the image is built
+          # as what it actually is: a Raspberry Pi.
+          printf 'Raspberry Pi 5 Model B Rev 1.0\0' \
+            | sudo tee "$MNT/etc/shackwright-pi-model" >/dev/null
+
+      - name: Install Shackwright into the image
+        id: install
+        run: |
+          mkdir -p ansible-output
+          rc=0
+          IFS=',' read -ra list <<< "${{ inputs.playbooks || 'install_soapy,install_hamlib' }}"
+          for name in "${list[@]}"; do
+            name="$(echo "$name" | xargs)"
+            [ -n "$name" ] || continue
+            echo "::group::$name"
+            started=$(date +%s)
+            sudo -E "$(command -v ansible-playbook)" \
+              -i "${MNT}," -c community.general.chroot \
+              -e ham_user=pi \
+              -e pi_model_path=/etc/shackwright-pi-model \
+              -e ansible_python_interpreter=/usr/bin/python3 \
+              library/set_facts.yml "tasks/${name}.yml" \
+              2>&1 | tee "ansible-output/${name}.log"
+            status=${PIPESTATUS[0]}
+            echo $(( $(date +%s) - started )) > "ansible-output/${name}.seconds"
+            [ "$status" -eq 0 ] || { echo "RESULT ${name}: FAIL"; rc=1; }
+            [ "$status" -eq 0 ] && echo "RESULT ${name}: PASS"
+            echo "::endgroup::"
+          done
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+          exit 0
+
+      - name: Finalize and unmount
+        if: always()
+        run: |
+          set -x
+          sudo rm -f "$MNT/usr/sbin/policy-rc.d"
+          if [ -f "$MNT/etc/ld.so.preload.disabled" ]; then
+            sudo mv "$MNT/etc/ld.so.preload.disabled" "$MNT/etc/ld.so.preload"
+          fi
+          sudo rm -f "$MNT/etc/shackwright-pi-model"
+
+          # Every flashed card must have its own SSH identity.
+          sudo rm -f "$MNT"/etc/ssh/ssh_host_*
+          sudo rm -rf "$MNT"/var/cache/apt/archives/*.deb
+          sudo rm -rf "$MNT"/var/log/*.log "$MNT"/var/log/journal/* || true
+
+          # Zero the free space so the image compresses to near its real size.
+          sudo dd if=/dev/zero of="$MNT/zero.fill" bs=4M status=none || true
+          sudo rm -f "$MNT/zero.fill"
+          sudo sync
+
+          for d in run dev/pts dev sys proc; do sudo umount -l "$MNT/$d" || true; done
+          sudo umount "$MNT/boot/firmware" 2>/dev/null || sudo umount "$MNT/boot" || true
+          sudo umount "$MNT" || true
+          sudo losetup -d "${{ steps.mount.outputs.loop }}" || true
+
+      - name: Package the image
+        if: always()
+        run: |
+          [ -f "$IMG" ] || { echo "no image produced"; exit 1; }
+          sudo chown "$USER" "$IMG"
+          version="0.0.0-ci-${GITHUB_RUN_NUMBER}"
+          packaging_utilities/package_release.sh "$IMG" "$version" release
+          ls -lh release/
+
+      - name: Summarize
+        if: always()
+        run: |
+          {
+            echo "## Raspberry Pi image build"
+            echo
+            echo "| Playbook | Result | ok | changed | failed | Duration |"
+            echo "|---|---|---|---|---|---|"
+            for log in ansible-output/*.log; do
+              [ -f "$log" ] || continue
+              name=$(basename "$log" .log)
+              recap=$(grep -oE 'ok=[0-9]+ +changed=[0-9]+ +unreachable=[0-9]+ +failed=[0-9]+' "$log" | tail -1)
+              ok=$(echo "$recap" | grep -oE 'ok=[0-9]+' | cut -d= -f2)
+              ch=$(echo "$recap" | grep -oE 'changed=[0-9]+' | cut -d= -f2)
+              fa=$(echo "$recap" | grep -oE 'failed=[0-9]+' | cut -d= -f2)
+              du=$(cat "ansible-output/${name}.seconds" 2>/dev/null || echo '?')
+              if [ "${fa:-1}" = "0" ]; then v='pass'; else v='**FAIL**'; fi
+              echo "| \`${name}\` | ${v} | ${ok:-?} | ${ch:-?} | ${fa:-?} | ${du}s |"
+            done
+            echo
+            echo "### Artifacts"
+            echo '```'
+            ls -lh release/ 2>/dev/null || echo 'none produced'
+            echo '```'
+            echo
+            echo "_Built by chroot on an arm64 runner. Not yet booted on hardware._"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the image
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: shackwright-image
+          path: release/
+          retention-days: 7
+
+      - name: Upload logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: image-build-logs
+          path: ansible-output/
+          retention-days: 14
+
+      - name: Fail if any playbook failed
+        if: steps.install.outputs.rc != '0'
+        run: exit 1

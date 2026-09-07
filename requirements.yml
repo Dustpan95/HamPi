@@ -1,0 +1,13 @@
+---
+# Ansible collections needed beyond ansible-core.
+#
+# Install with:
+#     ansible-galaxy collection install -r requirements.yml
+#
+collections:
+  # Provides the chroot connection plugin, which lets the playbook run
+  # against a mounted Raspberry Pi OS image rather than a live machine.
+  # That is how a flashable image is built without a Pi. Not needed for an
+  # ordinary run against real hardware over SSH.
+  - name: community.general
+    version: ">=8.0.0"
