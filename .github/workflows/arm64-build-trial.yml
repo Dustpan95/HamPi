@@ -25,7 +25,7 @@ on:
       playbooks:
         description: 'Comma-separated playbooks under tasks/ to run'
         required: true
-        default: 'install_soapy_sdr,install_soapy_rtlsdr,install_soapy_hackrf,install_soapy_airspy,install_soapy_airspyhf,install_soapy_plutosdr'
+        default: 'install_soapy,install_soapy_multi,install_soapy_netsdr'
       timeout_minutes:
         description: 'Give up after this many minutes (max 350)'
         required: false
@@ -82,7 +82,7 @@ jobs:
         id: build
         continue-on-error: true
         env:
-          PLAYBOOKS: ${{ inputs.playbooks || 'install_soapy_sdr,install_soapy_rtlsdr,install_soapy_hackrf,install_soapy_airspy,install_soapy_airspyhf,install_soapy_plutosdr' }}
+          PLAYBOOKS: ${{ inputs.playbooks || 'install_soapy,install_soapy_multi,install_soapy_netsdr' }}
         run: |
           mkdir -p ansible-output
           rc=0
@@ -147,16 +147,19 @@ jobs:
             # except by downloading the artifact.
             for log in ansible-output/*.log; do
               [ -f "$log" ] || continue
-              grep -q 'fatal:' "$log" || continue
               name=$(basename "$log" .log)
+              # Key off the recap the table already uses, so the table and
+              # these details can never disagree. Keying off the string
+              # 'fatal:' missed every failure in the previous run.
+              f=$(grep -oE 'failed=[0-9]+' "$log" | tail -1 | cut -d= -f2)
+              [ "${f:-0}" != "0" ] || continue
               echo "### ${name}"
               echo
               # The last TASK banner before the first fatal is the task that died.
-              task=$(awk '/fatal:/{exit} /^TASK \[/{t=$0} END{print t}' "$log")
-              echo "Failing task: \`${task:-unknown}\`"
-              echo
               echo '```'
-              grep -m1 'fatal:' "$log" | cut -c1-1200
+              # The tail always contains the error and the recap, whatever
+              # wording Ansible used for the failure.
+              tail -n 30 "$log"
               echo '```'
               echo
             done
