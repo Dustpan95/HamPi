@@ -1,0 +1,80 @@
+#
+# Copyright 2024 - 2026, HamPi contributors.
+# Licensed under the GNU General Public License v3.0. See LICENSE.
+#
+# Assertion pass for library/set_facts.yml. Run via tests/run_tests.sh, which
+# invokes set_facts.yml against a fixture first so the facts under test are
+# already in place.
+#
+
+---
+
+- name: Verify platform detection results
+  hosts: all
+  gather_facts: false
+  tasks:
+
+    - name: Report facts under test
+      ansible.builtin.debug:
+        msg: >-
+          pi_model=[{{ pi_model }}] is_rpi={{ is_rpi }} is_pi5={{ is_pi5 }}
+          is_pi4={{ is_pi4 }} is_pi_zero={{ is_pi_zero }} is_pc={{ is_pc }}
+
+    - name: Assert the hardware model parsed exactly, with no NUL terminator
+      ansible.builtin.assert:
+        that:
+          - pi_model == expect_model
+        fail_msg: >-
+          Expected model [{{ expect_model }}] but parsed [{{ pi_model }}].
+          A trailing NUL from /proc/device-tree/model is the usual cause.
+
+    - name: Assert the Raspberry Pi model flags
+      ansible.builtin.assert:
+        that:
+          - (is_rpi | bool) == (expect_rpi | bool)
+          - (is_pi5 | bool) == (expect_pi5 | bool)
+          - (is_pi4 | bool) == (expect_pi4 | bool)
+          - (is_pi_zero | bool) == (expect_pi_zero | bool)
+
+    - name: Assert exactly one platform class was selected
+      ansible.builtin.assert:
+        that:
+          - "[is_rpi | bool, is_pc | bool, is_iq | bool] | select | list | length == 1"
+        fail_msg: >-
+          Exactly one of is_rpi / is_pc / is_iq must be true, but got
+          is_rpi={{ is_rpi }} is_pc={{ is_pc }} is_iq={{ is_iq }}.
+
+    - name: Assert every platform fact is defined
+      # Guards against a regression where a fact is only set inside a `when`,
+      # leaving it undefined on other platforms. A `when: is_trixie|bool`
+      # against an undefined variable aborts the whole run.
+      ansible.builtin.assert:
+        that:
+          - item in hostvars[inventory_hostname]
+        fail_msg: "Platform fact '{{ item }}' is undefined; a `when` on it would abort the run."
+      loop:
+        - is_hampi
+        - is_hampc
+        - is_hamiq
+        - is_rpi
+        - is_pc
+        - is_iq
+        - is_arm
+        - is_arm_64
+        - is_i386
+        - is_x86_64
+        - is_debian
+        - is_ubuntu
+        - is_buster
+        - is_bullseye
+        - is_bookworm
+        - is_trixie
+        - is_forky
+        - is_impish
+        - is_jammy
+        - is_noble
+        - is_resolute
+        - pi_model
+        - is_pi_zero
+        - is_pi4
+        - is_pi5
