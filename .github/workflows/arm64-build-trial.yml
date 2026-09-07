@@ -96,11 +96,13 @@ jobs:
             # Take ansible-playbook's status, not tee's. `cmd | tee` reports
             # the exit code of tee, which is always 0, so testing it directly
             # reports every failed build as a pass.
+            started=$(date +%s)
             ansible-playbook -i 'localhost,' -c local \
               -e ham_user="$USER" \
               library/set_facts.yml "tasks/${name}.yml" \
               2>&1 | tee "ansible-output/${name}.log"
             status=${PIPESTATUS[0]}
+            echo $(( $(date +%s) - started )) > "ansible-output/${name}.seconds"
             if [ "$status" -eq 0 ]; then
               echo "RESULT ${name}: PASS"
             else
@@ -113,23 +115,37 @@ jobs:
           exit 0
 
       - name: Summarize
+        if: always()
         run: |
           {
             echo "## ARM64 build trial"
             echo
-            echo "| Playbook | Result |"
-            echo "|---|---|"
+            echo "Runner: \`$(uname -m)\`, $(nproc) cores, \
+          $(free -g | awk '/Mem:/{print $2}') GB RAM, \
+          $(. /etc/os-release && echo "$PRETTY_NAME")"
+            echo
+            echo "| Playbook | Result | ok | changed | failed | Duration |"
+            echo "|---|---|---|---|---|---|"
             for log in ansible-output/*.log; do
               [ -f "$log" ] || continue
               name=$(basename "$log" .log)
-              if grep -qE 'failed=[1-9]|ERROR!|fatal:' "$log"; then
-                echo "| \`${name}\` | FAIL |"
-              else
-                echo "| \`${name}\` | pass |"
-              fi
+              # Pull the counters straight out of the last PLAY RECAP rather
+              # than inferring from an exit code, so the table reports what
+              # Ansible actually did.
+              recap=$(grep -oE 'ok=[0-9]+ +changed=[0-9]+ +unreachable=[0-9]+ +failed=[0-9]+' "$log" | tail -1)
+              ok=$(echo "$recap"      | grep -oE 'ok=[0-9]+'      | cut -d= -f2)
+              changed=$(echo "$recap" | grep -oE 'changed=[0-9]+' | cut -d= -f2)
+              failed=$(echo "$recap"  | grep -oE 'failed=[0-9]+'  | cut -d= -f2)
+              dur=$(cat "ansible-output/${name}.seconds" 2>/dev/null || echo '?')
+              if [ "${failed:-1}" = "0" ]; then verdict='pass'; else verdict='**FAIL**'; fi
+              echo "| \`${name}\` | ${verdict} | ${ok:-?} | ${changed:-?} | ${failed:-?} | ${dur}s |"
             done
             echo
             echo "Disk remaining: $(df -h / | tail -1 | awk '{print $4}')"
+            echo
+            echo "_Ubuntu on a hosted runner, not Raspberry Pi OS on a Pi. This shows"
+            echo "whether the source builds compile on aarch64; it does not show that"
+            echo "Trixie's package set resolves, and nothing here touches a desktop._"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload logs
