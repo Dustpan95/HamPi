@@ -173,10 +173,20 @@
       path: "/home/{{ ham_user }}/hamradio/pat_{{ pat_version }}_{{ pat_arch }}.deb"
       state: absent
 
-  - name: Download Pi Ardop (ARM)
+  # John Wiseman publishes a separate build per architecture, and this task
+  # asked for the 32-bit one unconditionally. On a 64-bit image that installs
+  # an "ELF 32-bit LSB executable, ARM, EABI5" whose interpreter is
+  # /lib/ld-linux-armhf.so.3 -- which arm64 Raspberry Pi OS does not have, so
+  # the program cannot start at all. It shipped that way; the emulated boot
+  # check is what found it. piardopc64 at the same location is the aarch64
+  # build. The destination name stays piardopc either way, because that is
+  # what Pat's configuration invokes.
+  - name: Download Pi Ardop for {{ 'aarch64' if (is_arm_64 | bool) else 'armhf' }}
     become: yes
     ansible.builtin.get_url:
-      url: http://www.cantab.net/users/john.wiseman/Downloads/Beta/piardopc
+      url: >-
+        https://www.cantab.net/users/john.wiseman/Downloads/Beta/{{
+        'piardopc64' if (is_arm_64 | bool) else 'piardopc' }}
       dest: /usr/local/bin/piardopc
       mode: a+x
     when: is_arm | bool

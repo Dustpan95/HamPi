@@ -154,6 +154,64 @@ else
   bad "no manifest still yields the packaged programs" "exited non-zero"
 fi
 
+# --- the ELF classifier -----------------------------------------------------
+
+# smoke_test.sh decides pass or fail partly on what elf_kind() says, and the
+# first version of that decision was wrong in a way that mattered: it called
+# ldd's non-zero exit "unlinked" for a Python script, a static binary and a
+# wrong-architecture binary alike. The first reported a healthy program as
+# broken; the third was a genuine defect described in useless words.
+#
+# The headers below are synthesised rather than taken from real binaries, so
+# this runs anywhere. Bytes 0-3 are the ELF magic, byte 4 the class, and
+# bytes 18-19 the machine, little endian.
+# Synthesised ELF headers, so this runs anywhere without needing real
+# binaries of three architectures. Written as explicit byte escapes rather
+# than built from arguments: e_ident is 16 bytes (0-15), e_type is 16-17 and
+# e_machine is 18-19, and a fixture that is two bytes short puts the machine
+# where the type belongs and quietly tests nothing.
+#                    magic     cls ord ver  <-------- pad 9 -------->  type   machine
+printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\267\000' > "$tmp/aarch64.elf"
+printf '\177ELF\001\001\001\000\000\000\000\000\000\000\000\000\002\000\050\000' > "$tmp/arm32.elf"
+printf '\177ELF\002\001\001\000\000\000\000\000\000\000\000\000\002\000\076\000' > "$tmp/amd64.elf"
+printf '#!/usr/bin/python3\nprint(1)\n' > "$tmp/script.py"
+
+# Pull the function out of the guest script and run it against a pretend
+# aarch64 host, which is what it will actually be running on.
+awk '/^elf_kind\(\) \{/,/^\}/' "$SMOKE" > "$tmp/elf_kind.sh"
+if [ -s "$tmp/elf_kind.sh" ]; then
+  ok "elf_kind() can be extracted from $SMOKE"
+
+  classify() (
+    # shellcheck disable=SC1090
+    . "$tmp/elf_kind.sh"
+    uname() { echo aarch64; }
+    elf_kind "$1"
+  )
+
+  for case_ in "aarch64.elf:elf-native" "arm32.elf:elf-foreign" \
+               "amd64.elf:elf-foreign" "script.py:notelf"; do
+    f=${case_%%:*}; want=${case_#*:}
+    got=$(classify "$tmp/$f")
+    if [ "$got" = "$want" ]; then
+      ok "on aarch64, ${f} is ${want}"
+    else
+      bad "on aarch64, ${f} is ${want}" "got ${got}"
+    fi
+  done
+else
+  bad "elf_kind() can be extracted from $SMOKE" "function not found"
+fi
+
+# A wrong-architecture binary must fail the run, not be filed under ok.
+if grep -q 'wrongarch=$((wrongarch + 1))' "$SMOKE" &&
+   grep -q '\[ "\$wrongarch" -eq 0 \]' "$SMOKE"; then
+  ok "a wrong-architecture program fails the smoke test"
+else
+  bad "a wrong-architecture program fails the smoke test" \
+      "wrongarch is counted but not part of the verdict"
+fi
+
 # --- the guest script's contract with the harness ---------------------------
 
 for marker in SHACKWRIGHT-SMOKE-BEGIN SHACKWRIGHT-SMOKE-END "SMOKE-RESULT: PASS" \

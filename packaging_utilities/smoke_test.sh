@@ -31,6 +31,7 @@ exec >/dev/console 2>&1
 SMOKE_DIR=$(dirname "$0")
 missing=0
 unlinked=0
+wrongarch=0
 checked=0
 
 # This runs INSIDE the boot transaction: systemd.run= generates a unit that
@@ -63,6 +64,44 @@ echo "SHACKWRIGHT-SMOKE-BEGIN"
 echo "uname: $(uname -srm)"
 echo "os: $(. /etc/os-release 2>/dev/null; echo "$PRETTY_NAME")"
 echo "boot-time-at-check: $(cut -d' ' -f1 /proc/uptime)s"
+
+# Classifies a file by its ELF header, printing one of:
+#
+#   notelf        a script, or anything without the ELF magic
+#   elf-native    an ELF built for the architecture we are running on
+#   elf-foreign   an ELF built for a DIFFERENT architecture
+#   elf-other     an ELF for an architecture this function does not name
+#
+# This exists because "ldd exited non-zero" is not a diagnosis. ldd exits 1
+# for a shell script, for a static binary, and for a binary of the wrong
+# architecture, and those are three completely different situations: the
+# first two are fine and the third means the image ships a program that
+# cannot run. The first version of this script called all three "unlinked",
+# which reported a Python script as broken and a genuinely broken 32-bit
+# binary in the same words.
+#
+# Offsets, from the ELF specification: bytes 0-3 are the magic, byte 4 is
+# the class (1 = 32-bit, 2 = 64-bit), bytes 18-19 are the machine, little
+# endian -- 0x28 for 32-bit ARM, 0xb7 for AArch64.
+elf_kind() {
+  hdr=$(od -An -tx1 -N20 "$1" 2>/dev/null | tr -d ' \n')
+  case "$hdr" in
+    7f454c46*) ;;
+    *) echo notelf; return ;;
+  esac
+  machine="${hdr:36:2}${hdr:38:2}"
+  case "$(uname -m)" in
+    aarch64) want=b700 ;;
+    armv7l|armv6l) want=2800 ;;
+    x86_64)  want=3e00 ;;
+    *)       echo elf-other; return ;;
+  esac
+  if [ "$machine" = "$want" ]; then
+    echo elf-native
+  else
+    echo elf-foreign
+  fi
+}
 
 echo "--- programs ---"
 # programs.txt is written by the harness from the image manifest, so this
@@ -98,16 +137,43 @@ while read -r kind target; do
       ;;
   esac
 
+  kind_of=$(elf_kind "$path")
+  case "$kind_of" in
+    elf-foreign)
+      # The image ships a program built for another architecture. It cannot
+      # run, and no amount of library checking will change that.
+      echo "wrong-arch: ${path} (not $(uname -m))"
+      wrongarch=$((wrongarch + 1))
+      continue
+      ;;
+    notelf)
+      # A script. There are no shared libraries to resolve, so there is
+      # nothing here for ldd to say.
+      ver=$(timeout 20 "$path" --version 2>&1 | head -1)
+      echo "ok: ${path} (script) :: ${ver}"
+      continue
+      ;;
+  esac
+
   # ldd runs the program to resolve it, so it needs a timeout like anything
   # else here -- and this script runs inside the boot transaction, where a
   # hang would stop the boot rather than just this check.
-  lddout=$(timeout 30 ldd -r "$path" 2>/dev/null)
+  lddout=$(timeout 30 ldd -r "$path" 2>&1)
   lddrc=$?
+  case "$lddout" in
+    *'not a dynamic executable'*|*'statically linked'*)
+      # Statically linked. Nothing to resolve, and nothing wrong.
+      ver=$(timeout 20 "$path" --version 2>&1 | head -1)
+      echo "ok: ${path} (static) :: ${ver}"
+      continue
+      ;;
+  esac
   if [ "$lddrc" -ne 0 ]; then
     # Distinguish "checked and clean" from "could not check". Without this
     # the empty output of a failed ldd counts as zero unresolved symbols and
     # the program is reported ok without its libraries ever being verified.
     echo "unlinked: ${path} (ldd could not run, exit ${lddrc})"
+    printf '%s\n' "$lddout" | head -3 | sed 's/^/    /'
     unlinked=$((unlinked + 1))
     continue
   fi
@@ -125,8 +191,8 @@ while read -r kind target; do
 done < "${SMOKE_DIR}/programs.txt"
 
 echo "--- summary ---"
-echo "checked: ${checked}  missing: ${missing}  unlinked: ${unlinked}"
-if [ "$missing" -eq 0 ] && [ "$unlinked" -eq 0 ]; then
+echo "checked: ${checked}  missing: ${missing}  unlinked: ${unlinked}  wrong-arch: ${wrongarch}"
+if [ "$missing" -eq 0 ] && [ "$unlinked" -eq 0 ] && [ "$wrongarch" -eq 0 ]; then
   echo "SMOKE-RESULT: PASS"
 else
   echo "SMOKE-RESULT: FAIL"
