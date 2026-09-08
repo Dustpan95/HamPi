@@ -177,6 +177,29 @@ One of them cannot be repaired: `install_twhamqth` fetches from
 `install_twclock` fetched from the same dead site, but Debian still carries
 `twclock`, so it is restored from the package rather than retired.
 
+**No image has ever contained the whole tree.** The image build installs a
+list of twelve playbooks chosen to exercise the repairs, not to assemble a
+complete station — see `DEFAULT_PLAYBOOKS` in
+`.github/workflows/build-image.yml`. A build of all 100 enabled playbooks has
+never been attempted, so the published images are a working subset rather
+than the full distribution, and the time and disk a full run needs are
+unknown. The job's timeout is 350 minutes.
+
+**`INJECT_FACTS_AS_VARS` will break this tree.** Playbooks here reference
+gathered facts as bare names — `ansible_architecture`,
+`ansible_distribution_release`, `ansible_userspace_bits` — rather than through
+`ansible_facts`. That injection is deprecated and scheduled for removal in
+ansible-core 2.24, at which point each becomes undefined. There are 61 such
+references across 7 files. The `is_*` variables are unaffected: they come
+from `set_fact` in `library/set_facts.yml`, not from fact injection.
+
+**Images carry two kernels.** The build dist-upgrades the base image, which
+installs a newer kernel without removing the one Raspberry Pi OS shipped. The
+manifest from build 13 lists four module directories — 6.18.34 and 6.18.39,
+each in `-2712` and `-v8` flavours. It costs image size and download size for
+a kernel nothing will boot. Removing the superseded one is safe in principle
+and untested here.
+
 **SDR support is restored.** This was 12 of the 34. Every SoapySDR driver
 module was disabled as "build broken under Bookworm", and an arm64 trial found
 that diagnosis was wrong: each pulled in `gr-osmosdr`, which reaches
