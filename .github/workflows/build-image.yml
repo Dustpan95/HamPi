@@ -346,6 +346,50 @@ jobs:
             echo "</details>"
           } >> "$GITHUB_STEP_SUMMARY"
 
+      - name: Check every program is built for this architecture
+        # Build 15 shipped /usr/local/bin/piardopc as "ELF 32-bit LSB
+        # executable, ARM, EABI5, interpreter /lib/ld-linux-armhf.so.3" into a
+        # 64-bit image, where there is no armhf loader and it could not start.
+        # The emulated boot found it, but only after twenty more minutes of
+        # shrinking and booting. A program built for the wrong machine is
+        # visible the instant it lands on the disk, so look here instead and
+        # fail in seconds.
+        #
+        # This is the third program in this tree caught installing a 32-bit
+        # build onto a 64-bit system, after Pat and HAMRS, so it gets a
+        # standing check rather than another one-off fix.
+        run: |
+          want=$(uname -m)
+          echo "runner and image architecture: ${want}"
+          bad=0
+          checked=0
+          for p in $(awk '/^== Built from source/{f=1;next} /^==/{f=0} f && /^  \//{print $1}' \
+                       image-manifest.txt); do
+            f="${MNT}${p}"
+            [ -f "$f" ] || continue
+            case "$p" in *.AppImage) continue ;; esac
+            desc=$(file -b "$f" 2>/dev/null)
+            case "$desc" in
+              *ELF*)
+                checked=$((checked + 1))
+                case "${want}:${desc}" in
+                  aarch64:*aarch64*|x86_64:*x86-64*|armv7l:*ELF\ 32-bit*ARM*) ;;
+                  *)
+                    echo "WRONG ARCHITECTURE: ${p}"
+                    echo "    ${desc}"
+                    bad=$((bad + 1))
+                    ;;
+                esac
+                ;;
+              *) : ;;   # scripts and anything else: nothing to check
+            esac
+          done
+          echo "checked ${checked} compiled programs, ${bad} built for the wrong machine"
+          [ "$bad" -eq 0 ] || {
+            echo "Refusing to build an image containing programs that cannot run on it."
+            exit 1
+          }
+
       - name: Finalize and unmount
         if: always()
         run: |
