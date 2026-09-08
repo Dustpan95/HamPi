@@ -72,3 +72,8 @@ ansible-output/
 
 # Local ansible runtime cache, created by running the playbooks here.
 .ansible/
+
+# Python bytecode. Three of these outlived the tree they belonged to
+# and had to be deleted by hand; do not let that happen again.
+__pycache__/
+*.py[cod]
