@@ -119,6 +119,14 @@ jobs:
         # eight minutes into an image build.
         run: ./tests/test_task_structure.sh
 
+      - name: Check the emulation harness
+        # The harness decides which programs the smoke test looks for by
+        # parsing the build's manifest. If that parse comes back empty, every
+        # check still passes and the summary still says the boot was clean --
+        # because nothing was checked. This test drives the real generator
+        # and asserts on the paths it produces, not just how many.
+        run: ./tests/test_emulation_harness.sh
+
       - name: Run release packaging tests
         # Covers the split-and-reassemble path. A release the downloader
         # cannot put back together would only fail after several gigabytes

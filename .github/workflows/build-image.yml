@@ -461,133 +461,31 @@ jobs:
             "$before" "$after" "$(( 100 - after * 100 / before ))"
 
       - name: Boot the image under QEMU
+        id: emulate
         # The one check CI can make that resembles a real user's first five
-        # minutes: does this thing actually come up?
+        # minutes: does this thing come up, and do the programs run?
         #
-        # Every detail below was established by .github/workflows/
-        # qemu-boot-probe.yml against the stock Raspberry Pi OS image, and
-        # the first version of this step got three of them wrong at once,
-        # producing a 71-byte console log that said nothing whatsoever.
+        # This replaces an earlier version of this step that used QEMU's
+        # raspi3b machine and the image's own kernel8.img. That approach
+        # cannot work. raspi3b does not model the Raspberry Pi firmware, so
+        # the machine resets about nine seconds into systemd -- and it does
+        # that on the STOCK Raspberry Pi OS image too, which is how we know
+        # it was never a defect in anything built here. Four rounds of
+        # .github/workflows/qemu-boot-probe.yml established that, and the
+        # reasoning is kept in emulate_image.sh so nobody repeats it.
         #
-        #   * Capture BOTH serial ports. On QEMU's raspi3b the kernel talks
-        #     on the second one; the first receives nothing at all. A single
-        #     "-serial mon:stdio" records the wrong port and looks like a
-        #     machine that never booted.
-        #   * The console is ttyAMA1. Not ttyAMA0, and not ttyS0. On this
-        #     machine model the PL011 registers as ttyAMA1 and the mini UART
-        #     does not register at all:
+        # The harness is a script rather than inline YAML on purpose: anyone
+        # can point it at a downloaded release on their own machine and get
+        # the same answer this job got.
         #
-        #       3f201000.serial: ttyAMA1 at MMIO 0x3f201000 is a PL011 rev2
-        #       bcm2835-aux-uart: unable to register 8250 port
-        #       Warning: unable to open an initial console.
-        #
-        #     Naming either of the other two gives the kernel no /dev/console,
-        #     so systemd starts without one and dies and the board resets. The
-        #     probe did that forty times in six hundred seconds, and every one
-        #     of those boots looked flawless in the log, because earlycon
-        #     writes straight to MMIO and needs no tty.
-        #   * Do NOT pass -initrd. Booting with the image's initramfs8
-        #     panics with "Attempted to kill init!".
-        #
-        # Also bcm2710-rpi-3-b.dtb rather than the b-plus tree, to match the
-        # machine QEMU is modelling, and systemd.firstboot=off, because a
-        # first boot with nothing preset prompts on the console for locale
-        # and a root password and no answer can arrive from a file.
-        #
-        # raspi3b, not raspi4b: Ubuntu 24.04 ships QEMU 8.2 and raspi4b
-        # arrived in 9.0. QEMU's SD model also insists on a power-of-two
-        # image, which the 16 GiB build satisfies.
-        #
-        # This does not exercise the Pi bootloader, VideoCore firmware, GPIO,
-        # audio or any radio, and it does not replace putting the card in a
-        # Pi. It catches the class of failure that makes an image useless to
-        # everyone: a root filesystem that will not mount, a broken package
-        # state, a system that never reaches userspace.
-        #
-        # Deliberately not a gate. It reports what it saw. Read the log.
-        if: always()
+        # continue-on-error so the console log still gets uploaded and the
+        # summary still gets written when the boot fails. The job is failed
+        # at the end instead, where the reason is readable.
         continue-on-error: true
-        timeout-minutes: 20
         run: |
           sudo apt-get install -y -qq qemu-system-arm
-          loop=$(sudo losetup -Pf --show "$IMG")
-          mkdir -p qemu boot-mnt
-          sudo mount "${loop}p1" boot-mnt
-          sudo cp boot-mnt/kernel8.img qemu/ 2>/dev/null || true
-          sudo cp boot-mnt/bcm2710-rpi-3-b.dtb qemu/ 2>/dev/null || true
-          sudo chown -R "$USER" qemu
-          sudo umount boot-mnt
-          sudo losetup -d "$loop"
-
-          if [ ! -f qemu/kernel8.img ] || [ ! -f qemu/bcm2710-rpi-3-b.dtb ]; then
-            echo "No 64-bit kernel or Pi 3 device tree in the boot partition."
-            echo "Cannot boot here; this is not a verdict on the image."
-            exit 0
-          fi
-
-          # QEMU's SD model insists on a power-of-two image, and the image
-          # is no longer one now that it is shrunk to its contents. Pad a
-          # sparse copy up to the next power of two rather than the original,
-          # which costs no real disk and is also a more honest test: it is
-          # exactly what a card looks like after a small image is flashed to
-          # a larger one.
-          sz=$(stat -c%s "$IMG")
-          pot=1048576
-          while [ "$pot" -lt "$sz" ]; do pot=$((pot * 2)); done
-          cp --sparse=always "$IMG" qemu/sd.img
-          truncate -s "$pot" qemu/sd.img
-          echo "image ${sz} bytes, padded to ${pot} for QEMU"
-
-          : > qemu/uart0.log
-          : > qemu/uart1.log
-          set +e
-          timeout 900 qemu-system-aarch64 \
-            -M raspi3b \
-            -kernel qemu/kernel8.img \
-            -dtb qemu/bcm2710-rpi-3-b.dtb \
-            -drive file=qemu/sd.img,format=raw,if=sd \
-            -append "rw rootwait earlycon loglevel=8 \
-            console=ttyAMA1,115200 \
-            root=/dev/mmcblk0p2 rootfstype=ext4 \
-            systemd.firstboot=off systemd.unit=multi-user.target" \
-            -serial file:qemu/uart0.log \
-            -serial file:qemu/uart1.log \
-            -display none > qemu/qemu.stdout 2>&1
-          echo "qemu exited: $? (124 means it was still running at the limit)"
-          set -e
-
-          # The kernel talks on uart1 on this machine; keep both so a change
-          # in that is visible rather than silently empty.
-          cat qemu/uart0.log qemu/uart1.log > qemu/console.log
-
-          echo "### bytes captured"
-          for f in uart0 uart1 qemu.stdout; do
-            printf '  %-12s %s\n' "$f" "$(stat -c%s "qemu/${f}.log" 2>/dev/null \
-              || stat -c%s "qemu/${f}" 2>/dev/null || echo 0)"
-          done
-
-          echo "==================== BOOT CONSOLE (tail) ===================="
-          tail -n 40 qemu/console.log || true
-          echo "============================================================="
-          echo "### Boot markers"
-          # "systemd 257" rather than bare "systemd", which matches dozens of
-          # unrelated kernel lines and tells you nothing.
-          for marker in "Linux version" "VFS: Mounted root" "Run /sbin/init" \
-                        "systemd\[1\]: systemd" "Reached target" "login:" \
-                        "Kernel panic"; do
-            n=$(grep -c "$marker" qemu/console.log 2>/dev/null || echo 0)
-            printf '  %-22s %s\n' "$marker" "$n"
-          done
-
-          if grep -q "Kernel panic" qemu/console.log; then
-            echo "VERDICT: panicked. This image did not boot."
-          elif grep -q "Run /sbin/init" qemu/console.log; then
-            echo "VERDICT: root filesystem mounted and init started."
-          elif grep -q "Linux version" qemu/console.log; then
-            echo "VERDICT: kernel started but never reached init."
-          else
-            echo "VERDICT: no kernel output. Treat as inconclusive, not as a failure."
-          fi
+          mkdir -p qemu
+          SW_TIMEOUT=3000 packaging_utilities/emulate_image.sh "$IMG" qemu
 
       - name: Upload the boot console log
         if: always()
@@ -595,9 +493,10 @@ jobs:
         with:
           name: qemu-boot-console
           path: |
-            qemu/uart0.log
-            qemu/uart1.log
+            qemu/console.log
+            qemu/console-clean.log
             qemu/qemu.stdout
+            qemu/smoke/programs.txt
           retention-days: 14
           if-no-files-found: ignore
 
@@ -638,7 +537,26 @@ jobs:
             ls -lh release/ 2>/dev/null || echo 'none produced'
             echo '```'
             echo
-            echo "_Built by chroot on an arm64 runner. Not yet booted on hardware._"
+            echo "### Emulated boot"
+            echo
+            case "${{ steps.emulate.outcome }}" in
+              success) echo "Booted to multi-user under QEMU, and every program"
+                       echo "recorded in the manifest was present with its"
+                       echo "libraries resolved." ;;
+              *)       echo "**The emulated boot did not pass.** See the"
+                       echo "\`qemu-boot-console\` artifact." ;;
+            esac
+            echo
+            if [ -f qemu/console-clean.log ]; then
+              echo '```'
+              sed -n '/SHACKWRIGHT-SMOKE-BEGIN/,/SHACKWRIGHT-SMOKE-END/p' \
+                qemu/console-clean.log | head -80
+              echo '```'
+            fi
+            echo
+            echo "_Built by chroot on an arm64 runner. Emulated with a generic"
+            echo "kernel on QEMU's virt machine. Not booted on Raspberry Pi"
+            echo "hardware -- see README for what that distinction covers._"
           } | tee -a "$GITHUB_STEP_SUMMARY"
 
       - name: Upload the image
@@ -656,29 +574,55 @@ jobs:
         # is the right home, and package_release.sh has already split the
         # image into parts under the 2 GiB per-asset limit.
         #
-        # Marked prerelease, and named so, because nothing here has been
-        # booted. It is a build artifact people can flash and try, not a
-        # release anyone should be told is finished.
-        if: steps.install.outputs.rc == '0'
+        # Gated on the emulated boot, not just on the playbooks exiting
+        # zero. An image that does not reach multi-user is not something to
+        # hand anyone, however cleanly Ansible finished.
+        #
+        # Still a prerelease. Emulation says the filesystem and the userland
+        # are sound; it says nothing about the Raspberry Pi firmware, the
+        # GPU, audio, GPIO, or a radio on a serial port. Until somebody boots
+        # one on real hardware, "prerelease" is the accurate word.
+        if: steps.install.outputs.rc == '0' && steps.emulate.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           tag="image-build-${GITHUB_RUN_NUMBER}"
           gh release create "$tag" \
-            --title "Untested image build ${GITHUB_RUN_NUMBER}" \
+            --title "Image build ${GITHUB_RUN_NUMBER} (emulated, not hardware-tested)" \
             --prerelease \
             --notes "$(cat <<'NOTES'
-          Automated image build. **Not booted on hardware. Not a release.**
+          Automated image build. **Booted under emulation. Not booted on a
+          Raspberry Pi.**
 
           Built by chroot on a native arm64 runner from the official
           Raspberry Pi OS Trixie arm64 image, with the package index
           refreshed and the system dist-upgraded first.
 
-          Verify and flash per the RELEASE.md asset included here. If the
-          image is split into parts, reassemble them before flashing.
+          ### What was checked
 
-          If you boot this, please report what happens — that is the one
-          thing continuous integration cannot establish.
+          This exact image was booted under QEMU before publishing. It
+          reached `multi-user.target`, and every program the manifest lists
+          was present with its shared libraries resolving. The console log
+          is attached to the workflow run as `qemu-boot-console`, and you
+          can repeat the run yourself:
+
+              packaging_utilities/emulate_image.sh shackwright.img
+
+          ### What was not checked
+
+          Emulation runs a generic arm64 kernel on QEMU's `virt` machine,
+          because QEMU cannot boot the Raspberry Pi kernel to userland — its
+          `raspi3b` machine resets partway into systemd, on the stock
+          Raspberry Pi OS image just the same. So nothing here exercises the
+          Raspberry Pi firmware or kernel, the GPU or display, audio, GPIO,
+          Wi-Fi, or a radio on a serial or USB port.
+
+          That is why this is still a prerelease.
+
+          Verify and flash per the RELEASE.md asset included here.
+
+          If you boot this on real hardware, please report what happens —
+          that is the one thing continuous integration cannot establish.
           NOTES
           )" \
             release/* || {
@@ -723,4 +667,23 @@ jobs:
               echo "OK: ${name}"
             fi
           done
+
+          # The boot step is continue-on-error so its console log still gets
+          # uploaded when it fails. This is where that failure becomes the
+          # job's failure.
+          if [ "${{ steps.emulate.outcome }}" != "success" ]; then
+            rc=1
+            echo "=============================================================="
+            echo "FAILED: the image did not boot under emulation"
+            echo "=============================================================="
+            if [ -f qemu/console-clean.log ]; then
+              tail -n 60 qemu/console-clean.log
+            else
+              echo "No console log was produced at all."
+            fi
+            echo
+          else
+            echo "OK: emulated boot"
+          fi
+
           exit "$rc"
