@@ -485,7 +485,11 @@ jobs:
         run: |
           sudo apt-get install -y -qq qemu-system-arm
           mkdir -p qemu
-          SW_TIMEOUT=3000 packaging_utilities/emulate_image.sh "$IMG" qemu
+          # Two boots, so the timeout is per pass, not for the pair. The
+          # runners are 4-core and there is no KVM on arm64 hosted runners --
+          # this is TCG emulation throughout, which is why the budget is
+          # generous compared with how long a boot actually takes.
+          SW_TIMEOUT=2400 SW_SMP=4 packaging_utilities/emulate_image.sh "$IMG" qemu
 
       - name: Upload the boot console log
         if: always()
@@ -493,9 +497,13 @@ jobs:
         with:
           name: qemu-boot-console
           path: |
-            qemu/console.log
+            qemu/programs-console.log
+            qemu/login-console.log
+            qemu/programs-clean.log
+            qemu/login-clean.log
             qemu/console-clean.log
-            qemu/qemu.stdout
+            qemu/programs-qemu.stdout
+            qemu/login-qemu.stdout
             qemu/smoke/programs.txt
           retention-days: 14
           if-no-files-found: ignore
@@ -540,17 +548,17 @@ jobs:
             echo "### Emulated boot"
             echo
             case "${{ steps.emulate.outcome }}" in
-              success) echo "Booted to multi-user under QEMU, and every program"
-                       echo "recorded in the manifest was present with its"
-                       echo "libraries resolved." ;;
+              success) echo "Booted to a login prompt under QEMU, and every"
+                       echo "program recorded in the manifest was present with"
+                       echo "its libraries resolved." ;;
               *)       echo "**The emulated boot did not pass.** See the"
                        echo "\`qemu-boot-console\` artifact." ;;
             esac
             echo
-            if [ -f qemu/console-clean.log ]; then
+            if [ -f qemu/programs-clean.log ]; then
               echo '```'
               sed -n '/SHACKWRIGHT-SMOKE-BEGIN/,/SHACKWRIGHT-SMOKE-END/p' \
-                qemu/console-clean.log | head -80
+                qemu/programs-clean.log | head -80
               echo '```'
             fi
             echo

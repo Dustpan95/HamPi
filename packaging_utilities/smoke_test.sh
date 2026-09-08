@@ -39,15 +39,21 @@ checked=0
 # That rules out waiting here for the system to come up. The first version of
 # this script called `systemctl is-system-running --wait`, which deadlocks --
 # the unit waits for the boot, the boot waits for the unit, and the machine
-# sits at sysinit.target until the harness gives up. Detaching the work into a
-# transient unit with systemd-run did not fix it either; it powered the
-# machine off at 72 seconds, before the boot had finished.
+# sits at sysinit.target until the harness gives up.
+#
+# Detaching the work into a transient unit with systemd-run appeared not to
+# help: the machine powered off at 72 seconds, before the boot had finished.
+# That turned out to be a separate fault and not this script's. The
+# run-generator defaults SuccessAction to "exit", so the unit systemd.run=
+# creates shuts the machine down as soon as the command returns. It is
+# suppressed from the kernel command line in emulate_image.sh, and once it
+# was, detaching stopped being necessary at all.
 #
 # So do not coordinate with the boot at all. The checks below need nothing
 # from a running system -- they are file, linker and --version checks, all of
-# which are true the moment the root filesystem is mounted. Print the report,
-# exit, and let the boot carry on to a login prompt. The harness outside is
-# watching the console and decides when there is nothing left to wait for.
+# which are true the moment the root filesystem is mounted. Print the report
+# and exit. Whether the machine ever reaches a login prompt is established by
+# a second boot that does not run this script.
 #
 # Failed units are not reported from in here for the same reason: this early,
 # the list would be a snapshot of a boot still in progress. The harness reads
@@ -92,10 +98,23 @@ while read -r kind target; do
       ;;
   esac
 
-  notfound=$(ldd -r "$path" 2>/dev/null | grep -c 'not found')
+  # ldd runs the program to resolve it, so it needs a timeout like anything
+  # else here -- and this script runs inside the boot transaction, where a
+  # hang would stop the boot rather than just this check.
+  lddout=$(timeout 30 ldd -r "$path" 2>/dev/null)
+  lddrc=$?
+  if [ "$lddrc" -ne 0 ]; then
+    # Distinguish "checked and clean" from "could not check". Without this
+    # the empty output of a failed ldd counts as zero unresolved symbols and
+    # the program is reported ok without its libraries ever being verified.
+    echo "unlinked: ${path} (ldd could not run, exit ${lddrc})"
+    unlinked=$((unlinked + 1))
+    continue
+  fi
+  notfound=$(printf '%s\n' "$lddout" | grep -c 'not found')
   if [ "${notfound:-0}" -gt 0 ]; then
     echo "unlinked: ${path} (${notfound} unresolved)"
-    ldd -r "$path" 2>/dev/null | grep 'not found' | sed 's/^/    /'
+    printf '%s\n' "$lddout" | grep 'not found' | sed 's/^/    /'
     unlinked=$((unlinked + 1))
     continue
   fi
@@ -114,8 +133,9 @@ else
 fi
 echo "SHACKWRIGHT-SMOKE-END"
 
-# Deliberately no poweroff. Powering off here would stop the boot before it
-# reached a login prompt, and reaching a login prompt is half of what the
-# harness is trying to establish. Exiting lets default.target finish; the
-# harness shuts the machine down once it has seen everything it needs.
+# Deliberately no poweroff. This runs in the harness's first pass, whose boot
+# goal is the run-generator's own target; the generator defaults SuccessAction
+# to "exit", so returning from here is what powers the machine off. Calling
+# poweroff as well would race with that. Reaching a login prompt is a separate
+# boot, without this script in it at all.
 exit 0

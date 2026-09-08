@@ -132,25 +132,32 @@ bandwidth entirely.
 
 **Do not publish an image built from a run you have not read the log of, and do
 not describe an image as a release until it has been flashed and booted on real
-hardware.**
+hardware.** Booting under emulation is not that; see
+`packaging_utilities/emulate_image.sh` for exactly what it does and does not
+cover.
 
 ---
 
-## Why this is not fully automated
+## What the automated build does and does not cover
 
-GitHub's `ubuntu-24.04-arm` runners are free for public repositories and are
-native ARM64, so in principle the build could run in CI. Three things stop it
-today:
+`.github/workflows/build-image.yml` builds images on GitHub's
+`ubuntu-24.04-arm` runners, which are free for public repositories and native
+ARM64 — so the chroot build runs at full speed with no emulation penalty. It
+downloads the official Raspberry Pi OS image, grows it, installs into it,
+shrinks it back to its contents, boots it under QEMU and publishes it as a
+prerelease. The steps below are the same thing done by hand.
 
-- **A job is capped at 6 hours.** A full build takes several hours on a Pi 5
-  and the runners are not faster at this than the hardware. The full
-  application catalogue would very likely exceed the cap.
-- **Runners have roughly 25–29 GB of free disk.** A 32 GB image plus build
-  artifacts plus the compressed output does not comfortably fit.
-- **Nothing has been validated on hardware yet.** Automating the production of
-  an artifact nobody has confirmed boots would only produce broken images
-  faster.
+Three limits shape it:
 
-A reduced profile — a smaller application set aimed at the digital modes — may
-well fit inside those limits, and is the obvious first target for automation
-once a manual build has been proven.
+- **Disk.** Runners have roughly 25–29 GB free. A grown image, the build
+  artifacts and the compressed output together are a tight fit, which is why
+  the image is shrunk before packaging and why the boot harness deletes the
+  kernel it downloaded once it is done with it.
+- **Time.** A job is capped at 6 hours and this one sets `timeout-minutes:
+  350`. The full application catalogue has never been attempted; the workflow
+  installs a chosen subset, and how long all of it would take is unknown.
+- **Hardware.** Every published image is booted under emulation first, which
+  catches an image that will not come up at all. A generic kernel on QEMU's
+  `virt` machine exercises none of the Raspberry Pi firmware, GPU, audio,
+  GPIO or radio interfaces, so **nothing here has been validated on a Pi.**
+  That is why the releases are prereleases.

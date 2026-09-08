@@ -12,6 +12,12 @@ Target platform moves from Raspberry Pi OS Bookworm to Raspberry Pi OS
 Trixie (Debian 13). Not yet verified by an end-to-end build on hardware.
 
 ### Added
+- An emulated boot check for every image built. `emulate_image.sh` boots the
+  image under QEMU's `virt` machine with a generic arm64 kernel, attached over
+  NVMe so no initramfs is needed, and reports whether it reaches a login
+  prompt and whether every program the manifest recorded is present with its
+  libraries resolving. Publishing a release is gated on it. Still not a
+  substitute for a Raspberry Pi: no firmware, GPU, audio, GPIO or radio.
 - Debian 13 (Trixie) and Debian 14 (Forky) support.
 - Ubuntu 24.04 (Noble) and 26.04 (Resolute) support, each mapped onto the
   Debian release it forked from.

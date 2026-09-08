@@ -5,6 +5,13 @@ name: QEMU boot probe
 # for the next time the boot test needs debugging, and dispatch-only so it
 # does not run on its own.
 #
+# READ THIS FIRST: the build no longer boots images this way. Everything
+# below is a record of why raspi3b cannot be made to work, not of how the
+# boot test runs today. That is packaging_utilities/emulate_image.sh, which
+# boots the userland under QEMU's virt machine with a generic kernel and
+# reaches a login prompt. Come back here only if that stops working and you
+# need the raspi3b findings again.
+#
 # WHAT FOUR ROUNDS ESTABLISHED, all against the STOCK Raspberry Pi OS image
 # so that nothing here is a verdict on an image we built:
 #

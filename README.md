@@ -20,7 +20,7 @@ release was April 2024. The playbooks are overwhelmingly his work. See
 
 ## Status
 
-**Modernization in progress. Not yet verified on hardware.**
+**Modernization in progress. Booted under emulation, not yet on hardware.**
 
 Upstream targeted Raspberry Pi OS Bookworm and stopped there. Raspberry Pi OS
 moved to Debian 13 "Trixie" in October 2025, and a great deal of this tree
@@ -40,27 +40,44 @@ What has been done and verified automatically:
 | ansible-lint (production profile) | Clean |
 | Hamlib build on Trixie | Fixed (needs a hardware run) |
 
-What has **not** been done: a full build on a real Raspberry Pi. Every change so
-far is verified by syntax checks, linting and unit tests, which catch a large
-class of defects but cannot tell you whether a package still compiles. The
-first end-to-end run on real hardware is the next milestone, and it will find
-things. See [Known issues](#known-issues).
+What has **not** been done: a run on a real Raspberry Pi. Changes are verified
+by syntax checks, linting and unit tests, by an image build that compiles the
+source-built programs on a native arm64 runner, and by booting that image under
+emulation. That catches a large class of defects. It cannot tell you whether
+the Pi's own firmware will boot the card, or whether a radio on a serial port
+will key up. The first end-to-end run on real hardware is the next milestone,
+and it will find things. See [Known issues](#known-issues).
 
 ---
 
 ## Flashable image
 
-There is no downloadable image yet. Building one requires a full run on real
-hardware, which has not happened since the project was picked up, and shipping
-an image nobody has booted would only distribute breakage faster.
+Images are published under [Releases][releases], built by CI on a native arm64
+runner and marked prerelease. Each one is booted under emulation before it is
+published, and a build whose image does not come up does not get published at
+all — see [Known issues](#known-issues) for exactly what that check covers and
+what it cannot.
 
-The process for producing one, and the tooling to package and publish it, are
-in [docs/IMAGE.md](docs/IMAGE.md). `packaging_utilities/package_release.sh`
-compresses, checksums and splits an image into parts under GitHub's 2 GiB
-per-asset limit, and verifies the parts reassemble byte for byte before it will
-finish.
+They are prereleases because **nobody has booted one on a Raspberry Pi**. That
+is the remaining gap, and it is the single most useful thing anyone reading
+this could close.
 
-Until then, run the playbook against a fresh Raspberry Pi OS install as below.
+The process for producing one by hand, and the tooling to package and publish
+it, are in [docs/IMAGE.md](docs/IMAGE.md).
+`packaging_utilities/package_release.sh` compresses, checksums and splits an
+image into parts under GitHub's 2 GiB per-asset limit, and verifies the parts
+reassemble byte for byte before it will finish.
+
+You can run the same boot check yourself on anything you download:
+
+```bash
+packaging_utilities/emulate_image.sh shackwright.img
+```
+
+To install onto an existing system instead of flashing a card, run the
+playbook against a fresh Raspberry Pi OS install as below.
+
+[releases]: https://github.com/Dustpan95/Shackwright/releases
 
 ---
 
@@ -143,27 +160,53 @@ so a failed lookup stops with an explanation instead of a 404 or a fiction.
 `tests/test_removed_ansible_args.sh` runs in CI and fails if either comes
 back.
 
-**The emulated boot cannot reach a login prompt, and that is the emulator.**
-`.github/workflows/build-image.yml` boots every image it builds under QEMU.
-It gets as far as the root filesystem mounting, `/sbin/init` running, and
-systemd printing *Welcome to Debian GNU/Linux 13 (trixie)!* — then, about
-nine seconds later, the board resets. No shutdown sequence, no reboot
-request, no panic.
+**The image boots under emulation. That is not the same as booting on a Pi.**
+`.github/workflows/build-image.yml` boots every image it builds to a login
+prompt before publishing it, and refuses to publish one that does not come
+up. You can run the same check on a downloaded release yourself:
 
-This is not a fault in the images. It reproduces exactly on the stock,
-untouched Raspberry Pi OS image, which is why `qemu-boot-probe.yml` exists:
-it runs the same boot against stock so that any claim about a built image has
-a control behind it. QEMU's `raspi3b` does not model the Raspberry Pi
-firmware faithfully — the same boot logs `Failed to get GPIO 5 config` and
-`cam1_regulator: can't get GPIO`, and carries a watchdog whose emulated
-behaviour is not the hardware's.
+```bash
+packaging_utilities/emulate_image.sh shackwright.img
+```
 
-So the boot test's success marker is *root mounted and init started*, not a
-login prompt. That still catches what makes an image useless to everyone: a
-root filesystem that will not mount, a broken package state, a userspace that
-never starts. **It does not replace putting the card in a Pi, and no image
-here has been booted on real hardware.** Reports from anyone who does are the
-single most useful thing this project could receive right now.
+Getting there meant going around QEMU rather than through it. QEMU's
+`raspi3b` cannot boot Raspberry Pi OS to a login prompt: root mounts,
+`/sbin/init` runs, systemd prints *Welcome to Debian GNU/Linux 13 (trixie)!*,
+and about nine seconds later the board resets — no shutdown sequence, no
+reboot request, no panic. That reproduces exactly on the stock, untouched
+image, which is why `qemu-boot-probe.yml` exists: to keep a control behind
+any claim about a built one. `raspi3b` does not model the Pi firmware; the
+same boot logs `Failed to get GPIO 5 config` and carries a watchdog whose
+emulated behaviour is not the hardware's. `raspi4b` needs QEMU 9.0, which the
+runners do not have.
+
+So the userland is booted under QEMU's `virt` machine with a generic kernel
+instead. The Raspberry Pi kernel cannot be used there — its arm64 defconfigs
+contain no virtio at all — and Debian's cloud arm64 kernel builds
+`VIRTIO_BLK` as a module, which would mean shipping an initramfs. It builds
+`BLK_DEV_NVME`, `EXT4_FS`, `MSDOS_PARTITION`, `PCI_HOST_GENERIC` and
+`SERIAL_AMBA_PL011` in, so attaching the image as an NVMe namespace needs no
+initramfs and nothing from the image. The image is booted through a QEMU
+overlay and never written to, so what gets published is byte-for-byte what
+was tested.
+
+It takes two boots, and that is not laziness. Running a command at boot means
+`systemd.run=`, whose generator does not add a unit so much as redirect
+`default.target` at one of its own — so a boot carrying it never reaches
+multi-user or graphical at all. One boot runs the programs and powers itself
+off; a second, ordinary boot goes to the login prompt. The script reports on
+both, and fails if either does not do its job.
+
+**What that establishes:** the partition table and filesystem are sound, the
+userland comes up far enough to offer a login prompt, and every program the
+build manifest recorded is present with its shared libraries resolving — the
+failure a chroot build hides, where a program links against something that
+was there while building and is not there in the shipped image.
+
+**What it does not:** anything about the Raspberry Pi firmware or kernel, the
+GPU or display, audio, GPIO, Wi-Fi, or a radio on a serial or USB port. **No
+image here has been booted on real hardware.** Reports from anyone who does
+are still the single most useful thing this project could receive.
 
 **17 applications are disabled.** `tasks/main.yml` imports 100 playbooks and
 has 17 commented out, most marked "broken under Bookworm" by upstream —
